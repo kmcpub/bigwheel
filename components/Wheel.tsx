@@ -30,9 +30,14 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
     const numColors = WHEEL_COLORS.length;
     if (numUnique === 0) return map;
 
+    // 항목 수에 따라 색상 선택 전략을 조정합니다.
+    // 항목이 적으면 대비가 높은 색상을 선택하고, 많으면 무지개처럼 순차적인 색상을 선택합니다.
+    const step = numUnique > 0 && numUnique < numColors
+      ? Math.floor(numColors / numUnique)
+      : 1;
+
     uniqueItems.forEach((item, index) => {
-      // 순차적으로 색상을 할당하여 무지개 효과를 만듭니다.
-      const colorIndex = index % numColors;
+      const colorIndex = (index * step) % numColors;
       map.set(item, WHEEL_COLORS[colorIndex]);
     });
     return map;

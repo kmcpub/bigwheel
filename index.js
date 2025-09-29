@@ -236,8 +236,13 @@
       const numUnique = uniqueItems.length;
       const numColors = WHEEL_COLORS.length;
       if (numUnique === 0) return map;
+
+      const step = numUnique > 0 && numUnique < numColors
+        ? Math.floor(numColors / numUnique)
+        : 1;
+
       uniqueItems.forEach((item, index) => {
-        const colorIndex = index % numColors;
+        const colorIndex = (index * step) % numColors;
         map.set(item, WHEEL_COLORS[colorIndex]);
       });
       return map;
