@@ -280,11 +280,27 @@
       setPointerRotation(pointerRotationRef.current);
 
       if (isSpinningRef.current) {
-        const FRICTION = 0.995;
+        const HIGH_SPEED_THRESHOLD = 15.0;
+        const LOW_SPEED_THRESHOLD = 5.0;
+        const HIGH_FRICTION = 0.985;
+        const LOW_FRICTION = 0.998;
+        
+        const currentVelocity = Math.abs(velocityRef.current);
+        let currentFriction;
+
+        if (currentVelocity >= HIGH_SPEED_THRESHOLD) {
+            currentFriction = HIGH_FRICTION;
+        } else if (currentVelocity <= LOW_SPEED_THRESHOLD) {
+            currentFriction = LOW_FRICTION;
+        } else {
+            const progress = (currentVelocity - LOW_SPEED_THRESHOLD) / (HIGH_SPEED_THRESHOLD - LOW_SPEED_THRESHOLD);
+            currentFriction = LOW_FRICTION + progress * (HIGH_FRICTION - LOW_FRICTION);
+        }
+        
         const GRAVITY_FACTOR = 0.0012;
         const MIN_VELOCITY_FOR_GRAVITY = 2.0;
         const STOP_VELOCITY = 0.005;
-        let velocity = velocityRef.current * FRICTION;
+        let velocity = velocityRef.current * currentFriction;
         const segmentAngle = 360 / (items.length || 1);
 
         if (Math.abs(velocity) < MIN_VELOCITY_FOR_GRAVITY) {

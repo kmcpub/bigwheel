@@ -86,12 +86,30 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
     // 돌림판 애니메이션
     if (isSpinningRef.current) {
         // 돌림판 물리 상수
-        const FRICTION = 0.995; // 마찰력 증가로 더 빠른 감속
+        const HIGH_SPEED_THRESHOLD = 15.0; // 높은 마찰이 완전히 적용되는 속도
+        const LOW_SPEED_THRESHOLD = 5.0;  // 낮은 마찰이 완전히 적용되는 속도
+        const HIGH_FRICTION = 0.985;      // 높은 속도에서의 마찰력 (빠른 감속)
+        const LOW_FRICTION = 0.998;       // 낮은 속도에서의 마찰력 (느린 감속으로 긴장감 유발)
+
+        const currentVelocity = Math.abs(velocityRef.current);
+        let currentFriction;
+
+        if (currentVelocity >= HIGH_SPEED_THRESHOLD) {
+            currentFriction = HIGH_FRICTION;
+        } else if (currentVelocity <= LOW_SPEED_THRESHOLD) {
+            currentFriction = LOW_FRICTION;
+        } else {
+            // 두 임계값 사이의 속도에 대해 마찰력을 선형으로 보간하여 부드러운 전환을 만듭니다.
+            // 속도가 감소함에 따라 마찰 계수(감속률)가 점진적으로 높아져(값이 1에 가까워짐) 더 느리게 감속됩니다.
+            const progress = (currentVelocity - LOW_SPEED_THRESHOLD) / (HIGH_SPEED_THRESHOLD - LOW_SPEED_THRESHOLD);
+            currentFriction = LOW_FRICTION + progress * (HIGH_FRICTION - LOW_FRICTION);
+        }
+
         const GRAVITY_FACTOR = 0.0012;
         const MIN_VELOCITY_FOR_GRAVITY = 2.0; // 중력 효과 발동 속도 하향 조정
         const STOP_VELOCITY = 0.005;
 
-        let velocity = velocityRef.current * FRICTION;
+        let velocity = velocityRef.current * currentFriction;
         const segmentAngle = 360 / (items.length || 1);
         
         if (Math.abs(velocity) < MIN_VELOCITY_FOR_GRAVITY) {
