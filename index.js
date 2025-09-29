@@ -72,6 +72,52 @@
       )
     );
   };
+  
+  // --- START OF components/ScreenPickerModal.tsx ---
+  const ScreenPickerModal = ({ show, screens, onSelect, onClose }) => {
+    if (!show) {
+      return null;
+    }
+
+    return createElement("div", {
+        className: "fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4",
+        onClick: onClose,
+        "aria-modal": "true",
+        role: "dialog"
+      },
+      createElement("div", {
+          className: "bg-slate-800 rounded-lg shadow-2xl p-6 w-full max-w-md",
+          onClick: (e) => e.stopPropagation()
+        },
+        createElement("h2", { className: "text-2xl font-bold mb-4 text-cyan-400" }, "전체 화면으로 표시할 모니터 선택"),
+        createElement("p", { className: "text-gray-400 mb-6" }, "사용 가능한 디스플레이 목록입니다. 하나를 선택하여 전체 화면으로 전환하세요."),
+        createElement("div", { className: "flex flex-col gap-3" },
+          screens.map((screen, index) =>
+            createElement("button", {
+                key: screen.label || index,
+                onClick: () => onSelect(screen),
+                className: "w-full text-left p-4 bg-slate-700 hover:bg-slate-600 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              },
+              createElement("div", { className: "font-bold text-lg text-gray-100" },
+                `모니터 ${index + 1} `,
+                screen.isPrimary && createElement("span", { className: "text-xs font-normal bg-cyan-500 text-slate-900 px-2 py-0.5 rounded-full ml-2" }, "기본")
+              ),
+              createElement("div", { className: "text-sm text-gray-400" },
+                `해상도: ${screen.width} x ${screen.height}`
+              )
+            )
+          )
+        ),
+        createElement("div", { className: "mt-6 text-right" },
+          createElement("button", {
+            onClick: onClose,
+            className: "bg-slate-600 hover:bg-slate-500 text-white font-semibold py-2 px-4 rounded-md transition-colors"
+          }, "취소")
+        )
+      )
+    );
+  };
+
 
   // --- START OF components/Controls.tsx ---
   const Controls = ({ initialItems, onItemsChange, onShuffle }) => {
@@ -153,29 +199,19 @@
     const animationFrameRef = useRef(null);
     const audioContextRef = useRef(null);
 
-    const displayItems = useMemo(() => {
-      const n = items.length;
-      if (n > 0 && n < 16) {
-        const repeatCount = Math.ceil(16 / n);
-        return Array.from({ length: repeatCount }).flatMap(() => items);
-      }
-      return items;
-    }, [items]);
-
     const colorMap = useMemo(() => {
       const map = new Map();
-      const uniqueItems = Array.from(new Set(items));
+      const uniqueItems = [...new Set(items)];
       const numUnique = uniqueItems.length;
       if (numUnique === 0) return map;
-      const step = Math.floor(WHEEL_COLORS.length / numUnique);
       uniqueItems.forEach((item, index) => {
-        const colorIndex = (index * step) % WHEEL_COLORS.length;
+        const colorIndex = index % WHEEL_COLORS.length;
         map.set(item, WHEEL_COLORS[colorIndex]);
       });
       return map;
     }, [items]);
 
-    const numItems = displayItems.length;
+    const numItems = items.length;
     const size = 500;
     const center = size / 2;
     const radius = size / 2 - 10;
@@ -212,19 +248,21 @@
         const STOP_VELOCITY = 0.005;
 
         let velocity = velocityRef.current * FRICTION;
-        const segmentAngle = 360 / (displayItems.length || 1);
+        const segmentAngle = 360 / (items.length || 1);
         
         if (Math.abs(velocity) < MIN_VELOCITY_FOR_GRAVITY) {
-          const currentRotation = rotationRef.current + velocity;
-          const angleInSegment = currentRotation % segmentAngle;
-          const distanceFromCenter = angleInSegment - (segmentAngle / 2);
-          const force = -distanceFromCenter * GRAVITY_FACTOR * (MIN_VELOCITY_FOR_GRAVITY - Math.abs(velocity));
-          velocity += force;
+            const currentRotation = rotationRef.current + velocity;
+            const rotationAtPointer = currentRotation - 180.0;
+            const angleInSegment = ((rotationAtPointer % segmentAngle) + segmentAngle) % segmentAngle;
+            const distanceFromCenter = angleInSegment - (segmentAngle / 2);
+            const force = -distanceFromCenter * GRAVITY_FACTOR * (MIN_VELOCITY_FOR_GRAVITY - Math.abs(velocity));
+            velocity += force;
         }
 
         const nextRotation = rotationRef.current + velocity;
-        const lastSegmentIndex = Math.floor(rotationRef.current / segmentAngle);
-        const currentSegmentIndex = Math.floor(nextRotation / segmentAngle);
+        const pointerOffset = 180.0;
+        const lastSegmentIndex = Math.floor((rotationRef.current - pointerOffset) / segmentAngle);
+        const currentSegmentIndex = Math.floor((nextRotation - pointerOffset) / segmentAngle);
         
         if (currentSegmentIndex !== lastSegmentIndex) {
           playTickSound();
@@ -255,8 +293,8 @@
           const finalRotation = rotationRef.current;
           const degrees = (180 - (finalRotation % 360) + 360) % 360;
           const winningSegmentIndex = Math.floor(degrees / segmentAngle);
-          if (displayItems[winningSegmentIndex]) {
-            onSpinEnd(displayItems[winningSegmentIndex]);
+          if (items[winningSegmentIndex]) {
+            onSpinEnd(items[winningSegmentIndex]);
           }
         }
 
@@ -273,7 +311,7 @@
       }
 
       animationFrameRef.current = requestAnimationFrame(animate);
-    }, [displayItems, onSpinEnd, playTickSound]);
+    }, [items, onSpinEnd, playTickSound]);
 
     const handleSpin = () => {
       if (isSpinningRef.current || items.length < 2) return;
@@ -309,7 +347,7 @@
     const renderSegments = () => {
       if (numItems === 0) return null;
       const segmentAngle = 360 / numItems;
-      return displayItems.map((item, index) => {
+      return items.map((item, index) => {
         const startAngle = segmentAngle * index;
         const endAngle = startAngle + segmentAngle;
         const start = getCoordinatesForPercent(startAngle / 360);
@@ -352,7 +390,7 @@
       createElement("svg", { viewBox: `0 0 ${size} ${size}`, className: "w-full h-full", style: { transform: 'rotate(90deg)' } },
         createElement("g", { style: { transform: `rotate(${rotation}deg)`, transformOrigin: 'center' } },
           renderSegments(),
-          numItems > 0 && displayItems.map((_, index) => {
+          numItems > 0 && items.map((_, index) => {
             const angleDeg = (360 / numItems) * index;
             const [x, y] = getCoordinatesForPercent(angleDeg / 360);
             return createElement("circle", { key: `peg-${index}`, cx: x, cy: y, r: 4, fill: "#1f2937", stroke: "#4b5563", strokeWidth: "1" });
@@ -385,6 +423,8 @@
     });
     const [winner, setWinner] = useState(null);
     const [isFullscreen, setIsFullscreen] = useState(false);
+    const [screens, setScreens] = useState([]);
+    const [showScreenPicker, setShowScreenPicker] = useState(false);
 
     useEffect(() => {
       const handleFullscreenChange = () => {
@@ -416,6 +456,28 @@
         document.exitFullscreen();
       }
     }, []);
+    
+    const handleSelectScreen = async () => {
+        if (!('getScreenDetails' in window)) {
+            alert('이 브라우저에서는 화면 선택 기능을 지원하지 않습니다.');
+            return;
+        }
+        try {
+            const screenDetails = await window.getScreenDetails();
+            setScreens(screenDetails.screens);
+            setShowScreenPicker(true);
+        } catch (err) {
+            console.error("Error getting screen details:", err);
+            alert(`화면 정보를 가져올 수 없습니다: ${err.message}`);
+        }
+    };
+    
+    const enterFullscreenOnScreen = (screen) => {
+        document.documentElement.requestFullscreen({ screen }).catch(err => {
+            alert(`선택한 화면에서 전체 화면 모드를 시작할 수 없습니다: ${err.message}`);
+        });
+        setShowScreenPicker(false);
+    };
 
     return createElement(Fragment, null,
       createElement("div", { className: "h-screen text-gray-100 flex flex-col items-center p-4 font-sans overflow-hidden" },
@@ -431,19 +493,31 @@
             createElement(Controls, { initialItems: items, onItemsChange: handleItemsChange, onShuffle: handleShuffle })
           )
         ),
-        createElement(ResultModal, { winner: winner, onClose: handleCloseModal })
+        createElement(ResultModal, { winner: winner, onClose: handleCloseModal }),
+        createElement(ScreenPickerModal, { show: showScreenPicker, screens: screens, onSelect: enterFullscreenOnScreen, onClose: () => setShowScreenPicker(false) })
       ),
-      createElement("button", {
-        onClick: toggleFullscreen,
-        className: "fixed bottom-4 right-4 z-30 bg-slate-700 hover:bg-slate-600 text-white font-bold w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-colors",
-        "aria-label": isFullscreen ? "전체 화면 종료" : "전체 화면 시작"
-      }, isFullscreen ?
-        createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-6 w-6", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2 },
-          createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 1v4m0 0h-4m4 0l-5-5" })
-        ) :
-        createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-6 w-6", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2 },
-          createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M4 8V4m0 0h4M4 4l5 5m7-5h4m0 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m7 5h4m0 0v4m0-4l-5-5" })
-        )
+      createElement("div", { className: "fixed bottom-4 right-4 z-30 flex flex-col items-end gap-3" },
+          createElement("button", {
+            onClick: toggleFullscreen,
+            className: "bg-slate-700 hover:bg-slate-600 text-white font-bold w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-colors",
+            "aria-label": isFullscreen ? "전체 화면 종료" : "전체 화면 시작"
+          }, isFullscreen ?
+            createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-6 w-6", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2 },
+              createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 1v4m0 0h-4m4 0l-5-5" })
+            ) :
+            createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-6 w-6", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2 },
+              createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M4 8V4m0 0h4M4 4l5 5m7-5h4m0 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m7 5h4m0 0v4m0-4l-5-5" })
+            )
+          ),
+          !isFullscreen && 'getScreenDetails' in window && createElement("button", {
+            onClick: handleSelectScreen,
+            className: "bg-slate-700 hover:bg-slate-600 text-white font-bold w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-colors",
+            "aria-label": "모니터 선택하여 전체 화면"
+           },
+            createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-6 w-6", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2 },
+              createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" })
+            )
+          )
       )
     );
   };

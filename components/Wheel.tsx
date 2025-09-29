@@ -22,32 +22,22 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
   const animationFrameRef = useRef<number | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
 
-  // 항목이 16개 미만일 경우, 16개 이상의 가장 가까운 배수로 항목을 늘립니다.
-  const displayItems = useMemo(() => {
-    const n = items.length;
-    if (n > 0 && n < 16) {
-      const repeatCount = Math.ceil(16 / n);
-      return Array.from({ length: repeatCount }).flatMap(() => items);
-    }
-    return items;
-  }, [items]);
-  
   // 고유 항목에 일관되고 분산된 색상을 매핑합니다.
   const colorMap = useMemo(() => {
     const map = new Map<string, string>();
-    const uniqueItems = Array.from(new Set(items));
+    // FIX: The spread operator on a Set was inferring `unknown[]`. Using `Array.from` correctly infers `string[]`.
+    const uniqueItems: string[] = Array.from(new Set(items));
     const numUnique = uniqueItems.length;
     if (numUnique === 0) return map;
 
-    const step = Math.floor(WHEEL_COLORS.length / numUnique);
     uniqueItems.forEach((item, index) => {
-      const colorIndex = (index * step) % WHEEL_COLORS.length;
+      const colorIndex = index % WHEEL_COLORS.length;
       map.set(item, WHEEL_COLORS[colorIndex]);
     });
     return map;
   }, [items]);
 
-  const numItems = displayItems.length;
+  const numItems = items.length;
   const size = 500;
   const center = size / 2;
   const radius = size / 2 - 10;
@@ -94,11 +84,16 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
         const STOP_VELOCITY = 0.005;
 
         let velocity = velocityRef.current * FRICTION;
-        const segmentAngle = 360 / (displayItems.length || 1);
+        const segmentAngle = 360 / (items.length || 1);
         
         if (Math.abs(velocity) < MIN_VELOCITY_FOR_GRAVITY) {
             const currentRotation = rotationRef.current + velocity;
-            const angleInSegment = currentRotation % segmentAngle;
+            
+            // 포인터는 180도에 위치합니다. 따라서 휠 세그먼트가 180도에 정렬되도록 중력 효과를 계산합니다.
+            const rotationAtPointer = currentRotation - 180.0;
+            // 포인터 위치에서의 세그먼트 내 각도 (항상 양수 값 유지)
+            const angleInSegment = ((rotationAtPointer % segmentAngle) + segmentAngle) % segmentAngle;
+
             const distanceFromCenter = angleInSegment - (segmentAngle / 2);
             const force = -distanceFromCenter * GRAVITY_FACTOR * (MIN_VELOCITY_FOR_GRAVITY - Math.abs(velocity));
             velocity += force;
@@ -106,8 +101,11 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
 
         // 포인터와 페그(못) 상호작용
         const nextRotation = rotationRef.current + velocity;
-        const lastSegmentIndex = Math.floor(rotationRef.current / segmentAngle);
-        const currentSegmentIndex = Math.floor(nextRotation / segmentAngle);
+        // 포인터는 180도에 위치하므로, 회전 값을 180도만큼 오프셋하여 페그가 포인터를 지나는 시점을 정확히 감지합니다.
+        // 이렇게 하면 페그가 180도 라인을 통과할 때마다 세그먼트 인덱스가 변경됩니다.
+        const pointerOffset = 180.0;
+        const lastSegmentIndex = Math.floor((rotationRef.current - pointerOffset) / segmentAngle);
+        const currentSegmentIndex = Math.floor((nextRotation - pointerOffset) / segmentAngle);
         
         if (currentSegmentIndex !== lastSegmentIndex) {
           playTickSound();
@@ -152,11 +150,11 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
             setIsSpinning(false);
             
             const finalRotation = rotationRef.current;
-            // 정확한 판정선(180도)으로 승자 계산 로직 수정
+            // 포인터가 180도에 있으므로, 해당 위치를 기준으로 당첨자를 계산합니다.
             const degrees = (180 - (finalRotation % 360) + 360) % 360;
             const winningSegmentIndex = Math.floor(degrees / segmentAngle);
-            if (displayItems[winningSegmentIndex]) {
-                onSpinEnd(displayItems[winningSegmentIndex]);
+            if (items[winningSegmentIndex]) {
+                onSpinEnd(items[winningSegmentIndex]);
             }
         }
 
@@ -173,7 +171,7 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
     }
 
     animationFrameRef.current = requestAnimationFrame(animate);
-  }, [displayItems, onSpinEnd, playTickSound]);
+  }, [items, onSpinEnd, playTickSound]);
 
   const handleSpin = () => {
     if (isSpinningRef.current || items.length < 2) return;
@@ -216,7 +214,7 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
     if (numItems === 0) return null;
     const segmentAngle = 360 / numItems;
 
-    return displayItems.map((item, index) => {
+    return items.map((item, index) => {
       const startAngle = segmentAngle * index;
       const endAngle = startAngle + segmentAngle;
       
@@ -283,7 +281,7 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
         >
           {renderSegments()}
           {/* 페그(못) 렌더링 */}
-          {numItems > 0 && displayItems.map((_, index) => {
+          {numItems > 0 && items.map((_, index) => {
               const angleDeg = (360 / numItems) * index;
               const [x, y] = getCoordinatesForPercent(angleDeg / 360);
               return (

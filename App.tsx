@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import Wheel from './components/Wheel';
 import Controls from './components/Controls';
 import ResultModal from './components/ResultModal';
+import ScreenPickerModal from './components/ScreenPickerModal';
 import { PRESET_ITEMS } from './constants';
 
 const App: React.FC = () => {
@@ -25,6 +26,9 @@ const App: React.FC = () => {
   
   const [winner, setWinner] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [screens, setScreens] = useState<any[]>([]);
+  const [showScreenPicker, setShowScreenPicker] = useState(false);
+
 
   // 전체 화면 상태 변경을 감지하는 이벤트 리스너
   useEffect(() => {
@@ -71,6 +75,30 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const handleSelectScreen = async () => {
+    if (!('getScreenDetails' in window)) {
+        alert('이 브라우저에서는 화면 선택 기능을 지원하지 않습니다.');
+        return;
+    }
+    try {
+        const screenDetails = await (window as any).getScreenDetails();
+        setScreens(screenDetails.screens);
+        setShowScreenPicker(true);
+    } catch (err) {
+        console.error("Error getting screen details:", err);
+        alert(`화면 정보를 가져올 수 없습니다: ${(err as Error).message}`);
+    }
+  };
+
+  const enterFullscreenOnScreen = (screen: any) => {
+      // FIX: Cast FullscreenOptions to `any` to allow using the experimental `screen` property for multi-screen support.
+      document.documentElement.requestFullscreen({ screen } as any).catch(err => {
+          alert(`선택한 화면에서 전체 화면 모드를 시작할 수 없습니다: ${err.message}`);
+      });
+      setShowScreenPicker(false);
+  };
+
+
   return (
     <>
       <div className="h-screen text-gray-100 flex flex-col items-center p-4 font-sans overflow-hidden">
@@ -91,23 +119,43 @@ const App: React.FC = () => {
         </main>
 
         <ResultModal winner={winner} onClose={handleCloseModal} />
+        <ScreenPickerModal 
+            show={showScreenPicker} 
+            screens={screens} 
+            onSelect={enterFullscreenOnScreen} 
+            onClose={() => setShowScreenPicker(false)} 
+        />
       </div>
 
-      <button
-        onClick={toggleFullscreen}
-        className="fixed bottom-4 right-4 z-30 bg-slate-700 hover:bg-slate-600 text-white font-bold w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-colors"
-        aria-label={isFullscreen ? "전체 화면 종료" : "전체 화면 시작"}
-      >
-        {isFullscreen ? (
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 1v4m0 0h-4m4 0l-5-5" />
-          </svg>
-        ) : (
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m7-5h4m0 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m7 5h4m0 0v4m0-4l-5-5" />
-          </svg>
+      <div className="fixed bottom-4 right-4 z-30 flex flex-col items-end gap-3">
+        <button
+          onClick={toggleFullscreen}
+          className="bg-slate-700 hover:bg-slate-600 text-white font-bold w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-colors"
+          aria-label={isFullscreen ? "전체 화면 종료" : "전체 화면 시작"}
+        >
+          {isFullscreen ? (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 1v4m0 0h-4m4 0l-5-5" />
+            </svg>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m7-5h4m0 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m7 5h4m0 0v4m0-4l-5-5" />
+            </svg>
+          )}
+        </button>
+
+        {!isFullscreen && 'getScreenDetails' in window && (
+          <button
+              onClick={handleSelectScreen}
+              className="bg-slate-700 hover:bg-slate-600 text-white font-bold w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-colors"
+              aria-label="모니터 선택하여 전체 화면"
+          >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+          </button>
         )}
-      </button>
+      </div>
     </>
   );
 };
