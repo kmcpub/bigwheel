@@ -5,15 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>돌려돌려~ 돌림판!</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script type="importmap">
-      {
-        "imports": {
-          "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
-          "react/": "https://aistudiocdn.com/react@^19.1.1/",
-          "react": "https://aistudiocdn.com/react@^19.1.1"
-        }
-      }
-    </script>
     <style>
       @keyframes confetti-fall {
         0% {
@@ -85,11 +76,25 @@
         100% { transform: translate(-20vw, -10vh) rotate(-70deg) scale(1); }
       }
     </style>
-  <link rel="stylesheet" href="/index.css">
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.1.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
+    "react/": "https://aistudiocdn.com/react@^19.1.1/"
+  }
+}
+</script>
 </head>
   <body class="text-white h-full">
     <div class="gradient-bg"></div>
     <div id="root" class="h-full relative z-10"></div>
-    <script type="module" src="/index.tsx"></script>
+
+    <!-- React 라이브러리 로드 -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    
+    <!-- 빌드된 애플리케이션 스크립트 로드 -->
+    <script src="index.js"></script>
   </body>
 </html>
