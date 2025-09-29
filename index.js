@@ -441,6 +441,17 @@
         console.error("아이템을 저장하는 데 실패했습니다:", error);
       }
     }, [items]);
+    
+    const wheelItems = useMemo(() => {
+        if (items.length === 0) {
+            return [];
+        }
+        if (items.length > 0 && items.length < 16) {
+            const multiplier = Math.ceil(16 / items.length);
+            return Array.from({ length: multiplier }, () => items).flat();
+        }
+        return items;
+    }, [items]);
 
     const handleItemsChange = useCallback((newItems) => { setItems(newItems); }, []);
     const handleShuffle = useCallback(() => { setItems(prevItems => [...prevItems].sort(() => Math.random() - 0.5)); }, []);
@@ -487,7 +498,7 @@
         ),
         createElement("main", { className: "w-full max-w-7xl flex-grow flex flex-col lg:flex-row gap-8 items-stretch min-h-0" },
           createElement("div", { className: "w-full lg:w-2/3 flex items-center justify-center" },
-            createElement(Wheel, { items: items, onSpinEnd: handleSpinEnd })
+            createElement(Wheel, { items: wheelItems, onSpinEnd: handleSpinEnd })
           ),
           createElement("div", { className: "w-full lg:w-1/3 flex flex-col min-h-0" },
             createElement(Controls, { initialItems: items, onItemsChange: handleItemsChange, onShuffle: handleShuffle })

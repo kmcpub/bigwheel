@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import Wheel from './components/Wheel';
 import Controls from './components/Controls';
 import ResultModal from './components/ResultModal';
@@ -48,6 +48,18 @@ const App: React.FC = () => {
       console.error("아이템을 저장하는 데 실패했습니다:", error);
     }
   }, [items]);
+
+  const wheelItems = useMemo(() => {
+    if (items.length === 0) {
+        return [];
+    }
+    if (items.length > 0 && items.length < 16) {
+        const multiplier = Math.ceil(16 / items.length);
+        return Array.from({ length: multiplier }, () => items).flat();
+    }
+    return items;
+  }, [items]);
+
 
   const handleItemsChange = useCallback((newItems: string[]) => {
     setItems(newItems);
@@ -111,7 +123,7 @@ const App: React.FC = () => {
 
         <main className="w-full max-w-7xl flex-grow flex flex-col lg:flex-row gap-8 items-stretch min-h-0">
           <div className="w-full lg:w-2/3 flex items-center justify-center">
-            <Wheel items={items} onSpinEnd={handleSpinEnd} />
+            <Wheel items={wheelItems} onSpinEnd={handleSpinEnd} />
           </div>
           <div className="w-full lg:w-1/3 flex flex-col min-h-0">
             <Controls initialItems={items} onItemsChange={handleItemsChange} onShuffle={handleShuffle} />
