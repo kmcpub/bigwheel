@@ -242,14 +242,14 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
                 width: '8%', 
                 height: '12%', 
                 top: '-11%', // 겹침 방지를 위해 포인터를 약간 위로 이동
-                filter: 'drop-shadow(0 4px 3px rgb(0 0 0 / 0.3))',
                 transform: `rotate(${pointerRotation}deg)`,
-                transformOrigin: '50% 41.66%'
+                transformOrigin: '50% 33.33%', // 원의 중심(y=20)에 맞춘 회전 중심
+                filter: 'drop-shadow(0 2px 3px rgba(0, 0, 0, 0.4))' // 그림자 효과 추가
             }}
         >
              <svg width="100%" height="100%" viewBox="0 0 40 60" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M20 0C8.9543 0 0 11.1929 0 25C0 35.8333 15 45 15 45L20 60L25 45C25 45 40 35.8333 40 25C40 11.1929 31.0457 0 20 0Z" fill="#facc15"/>
-                <circle cx="20" cy="25" r="5" fill="#eab308"/>
+                <path d="M20,60 C20,60 40,40 40,20 A20,20 0 1,0 0,20 C0,40 20,60 20,60 Z" fill="#fbbf24"/>
+                <circle cx="20" cy="20" r="7" fill="#f59e0b"/>
             </svg>
         </div>
       <svg

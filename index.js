@@ -213,7 +213,7 @@
       )
     );
   };
-
+  
   // --- START OF components/Wheel.tsx ---
   const Wheel = ({ items, onSpinEnd }) => {
     const [isSpinning, setIsSpinning] = useState(false);
@@ -266,36 +266,34 @@
     const animate = useCallback(() => {
       const POINTER_STIFFNESS = 0.3;
       const POINTER_DAMPING = 0.85;
-      
       const restoringForce = -pointerRotationRef.current * POINTER_STIFFNESS;
       pointerVelocityRef.current += restoringForce;
       pointerVelocityRef.current *= POINTER_DAMPING;
       pointerRotationRef.current += pointerVelocityRef.current;
       setPointerRotation(pointerRotationRef.current);
-      
+
       if (isSpinningRef.current) {
         const FRICTION = 0.995;
         const GRAVITY_FACTOR = 0.0012;
         const MIN_VELOCITY_FOR_GRAVITY = 2.0;
         const STOP_VELOCITY = 0.005;
-
         let velocity = velocityRef.current * FRICTION;
         const segmentAngle = 360 / (items.length || 1);
-        
+
         if (Math.abs(velocity) < MIN_VELOCITY_FOR_GRAVITY) {
-            const currentRotation = rotationRef.current + velocity;
-            const rotationAtPointer = currentRotation - 180.0;
-            const angleInSegment = ((rotationAtPointer % segmentAngle) + segmentAngle) % segmentAngle;
-            const distanceFromCenter = angleInSegment - (segmentAngle / 2);
-            const force = -distanceFromCenter * GRAVITY_FACTOR * (MIN_VELOCITY_FOR_GRAVITY - Math.abs(velocity));
-            velocity += force;
+          const currentRotation = rotationRef.current + velocity;
+          const rotationAtPointer = currentRotation - 180.0;
+          const angleInSegment = ((rotationAtPointer % segmentAngle) + segmentAngle) % segmentAngle;
+          const distanceFromCenter = angleInSegment - (segmentAngle / 2);
+          const force = -distanceFromCenter * GRAVITY_FACTOR * (MIN_VELOCITY_FOR_GRAVITY - Math.abs(velocity));
+          velocity += force;
         }
 
         const nextRotation = rotationRef.current + velocity;
         const pointerOffset = 180.0;
         const lastSegmentIndex = Math.floor((rotationRef.current - pointerOffset) / segmentAngle);
         const currentSegmentIndex = Math.floor((nextRotation - pointerOffset) / segmentAngle);
-        
+
         if (currentSegmentIndex !== lastSegmentIndex) {
           playTickSound();
           const kickDirection = Math.sign(velocity) || (currentSegmentIndex > lastSegmentIndex ? 1 : -1);
@@ -309,10 +307,9 @@
             if (pointerRotationRef.current > 0) pointerRotationRef.current = 0;
             pointerVelocityRef.current = -kickVelocity;
           }
-
           velocity *= 0.96;
         }
-        
+
         if (Math.abs(velocity) < STOP_VELOCITY) {
           settlingRef.current = true;
         }
@@ -322,7 +319,6 @@
           isSpinningRef.current = false;
           settlingRef.current = false;
           setIsSpinning(false);
-          
           const finalRotation = rotationRef.current;
           const degrees = (180 - (finalRotation % 360) + 360) % 360;
           const winningSegmentIndex = Math.floor(degrees / segmentAngle);
@@ -330,19 +326,17 @@
             onSpinEnd(items[winningSegmentIndex]);
           }
         }
-
         velocityRef.current = velocity;
         rotationRef.current += velocity;
         lastRotationRef.current = rotationRef.current;
         setRotation(rotationRef.current);
       }
-      
+
       if (!isSpinningRef.current && Math.abs(pointerVelocityRef.current) < 0.01 && Math.abs(pointerRotationRef.current) < 0.01) {
         if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
         return;
       }
-
       animationFrameRef.current = requestAnimationFrame(animate);
     }, [items, onSpinEnd, playTickSound]);
 
@@ -364,10 +358,12 @@
         animationFrameRef.current = requestAnimationFrame(animate);
       }
     };
-    
+
     useEffect(() => {
       return () => {
-        if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+        }
       };
     }, []);
 
@@ -386,7 +382,7 @@
         const start = getCoordinatesForPercent(startAngle / 360);
         const end = getCoordinatesForPercent(endAngle / 360);
         const largeArcFlag = segmentAngle > 180 ? 1 : 0;
-        const pathData = `M ${center},${center} L ${start[0]},${start[1]} A ${radius},${radius} 0 ${largeArcFlag} 1 ${end[0]},${end[1]} Z`;
+        const pathData = [`M ${center},${center}`, `L ${start[0]},${start[1]}`, `A ${radius},${radius} 0 ${largeArcFlag} 1 ${end[0]},${end[1]}`, 'Z'].join(' ');
         const textAngle = startAngle + segmentAngle / 2;
         const textRotation = textAngle > 90 && textAngle < 270 ? textAngle - 180 : textAngle;
         const textX = center + (radius / 1.5) * Math.cos(textAngle * Math.PI / 180);
@@ -409,17 +405,18 @@
       createElement("div", {
         className: "absolute left-1/2 -translate-x-1/2 z-20",
         style: {
-          width: '8%', height: '12%', top: '-11%',
-          filter: 'drop-shadow(0 4px 3px rgb(0 0 0 / 0.3))',
+          width: '8%',
+          height: '12%',
+          top: '-11%',
           transform: `rotate(${pointerRotation}deg)`,
-          transformOrigin: '50% 41.66%'
+          transformOrigin: '50% 33.33%',
+          filter: 'drop-shadow(0 2px 3px rgba(0, 0, 0, 0.4))'
         }
       },
-        createElement("svg", { width: "100%", height: "100%", viewBox: "0 0 40 60", fill: "none", xmlns: "http://www.w3.org/2000/svg" },
-          createElement("path", { d: "M20 0C8.9543 0 0 11.1929 0 25C0 35.8333 15 45 15 45L20 60L25 45C25 45 40 35.8333 40 25C40 11.1929 31.0457 0 20 0Z", fill: "#facc15" }),
-          createElement("circle", { cx: "20", cy: "25", r: "5", fill: "#eab308" })
-        )
-      ),
+      createElement("svg", { width: "100%", height: "100%", viewBox: "0 0 40 60", fill: "none", xmlns: "http://www.w3.org/2000/svg" },
+        createElement("path", { d: "M20,60 C20,60 40,40 40,20 A20,20 0 1,0 0,20 C0,40 20,60 20,60 Z", fill: "#fbbf24" }),
+        createElement("circle", { cx: "20", cy: "20", r: "7", fill: "#f59e0b" })
+      )),
       createElement("svg", { viewBox: `0 0 ${size} ${size}`, className: "w-full h-full", style: { transform: 'rotate(90deg)' } },
         createElement("g", { style: { transform: `rotate(${rotation}deg)`, transformOrigin: 'center' } },
           renderSegments(),
@@ -431,13 +428,14 @@
         )
       ),
       createElement("button", {
-        onClick: handleSpin, disabled: isSpinning || items.length < 2,
+        onClick: handleSpin,
+        disabled: isSpinning || items.length < 2,
         className: "absolute z-10 bg-cyan-500 hover:bg-cyan-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold w-24 h-24 rounded-full shadow-lg transform transition-all duration-300 hover:scale-110 focus:outline-none focus:ring-4 focus:ring-cyan-300 flex items-center justify-center text-xl",
         "aria-label": "돌림판 돌리기"
       }, isSpinning ? '...' : '돌리기!')
     );
   };
-
+  
   // --- START OF App.tsx ---
   const App = () => {
     const [items, setItems] = useState(() => {
@@ -454,6 +452,7 @@
       }
       return PRESET_ITEMS.participants;
     });
+
     const [winner, setWinner] = useState(null);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [screens, setScreens] = useState([]);
@@ -474,16 +473,14 @@
         console.error("아이템을 저장하는 데 실패했습니다:", error);
       }
     }, [items]);
-    
+
     const wheelItems = useMemo(() => {
-        if (items.length === 0) {
-            return [];
-        }
-        if (items.length > 0 && items.length < 16) {
-            const multiplier = Math.ceil(16 / items.length);
-            return Array.from({ length: multiplier }, () => items).flat();
-        }
-        return items;
+      if (items.length === 0) return [];
+      if (items.length > 0 && items.length < 16) {
+        const multiplier = Math.ceil(16 / items.length);
+        return Array.from({ length: multiplier }, () => items).flat();
+      }
+      return items;
     }, [items]);
 
     const handleItemsChange = useCallback((newItems) => { setItems(newItems); }, []);
@@ -541,37 +538,35 @@
         createElement(ScreenPickerModal, { show: showScreenPicker, screens: screens, onSelect: enterFullscreenOnScreen, onClose: () => setShowScreenPicker(false) })
       ),
       createElement("div", { className: "fixed bottom-4 right-4 z-30 flex flex-col items-end gap-3" },
-          createElement("button", {
-            onClick: toggleFullscreen,
-            className: "bg-slate-700 hover:bg-slate-600 text-white font-bold w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-colors",
-            "aria-label": isFullscreen ? "전체 화면 종료" : "전체 화면 시작"
-          }, isFullscreen ?
+        createElement("button", { onClick: toggleFullscreen, className: "bg-slate-700 hover:bg-slate-600 text-white font-bold w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-colors", "aria-label": isFullscreen ? "전체 화면 종료" : "전체 화면 시작" },
+          isFullscreen ?
             createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-6 w-6", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2 },
               createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M9 9L4 4m0 0v4m0-4h4M15 9l5-5m0 0v4m0-4h-4M9 15l-5 5m0 0v-4m0 4h4M15 15l5 5m0 0v-4m0 4h-4" })
             ) :
             createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-6 w-6", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2 },
               createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M4 8V4m0 0h4M4 4l5 5M20 8V4m0 0h-4M20 4l-5 5M4 16v4m0 0h4M4 20l5-5M20 16v4m0 0h-4M20 20l-5-5" })
             )
-          ),
-          !isFullscreen && 'getScreenDetails' in window && createElement("button", {
-            onClick: handleSelectScreen,
-            className: "bg-slate-700 hover:bg-slate-600 text-white font-bold w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-colors",
-            "aria-label": "모니터 선택하여 전체 화면"
-           },
-            createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-6 w-6", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2 },
-              createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" })
-            )
+        ),
+        !isFullscreen && 'getScreenDetails' in window &&
+        createElement("button", { onClick: handleSelectScreen, className: "bg-slate-700 hover:bg-slate-600 text-white font-bold w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-colors", "aria-label": "모니터 선택하여 전체 화면" },
+          createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-6 w-6", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2 },
+            createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" })
           )
+        )
       )
     );
   };
-
+  
   // --- START OF index.tsx ---
   const rootElement = document.getElementById('root');
   if (!rootElement) {
     throw new Error("Could not find root element to mount to");
   }
   const root = ReactDOM.createRoot(rootElement);
-  root.render(createElement(StrictMode, null, createElement(App, null)));
+  root.render(
+    createElement(StrictMode, null,
+      createElement(App)
+    )
+  );
 
 })();
