@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ko" class="h-full">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>돌려돌려~ 돌림판!</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
+          "react/": "https://aistudiocdn.com/react@^19.1.1/",
+          "react": "https://aistudiocdn.com/react@^19.1.1"
+        }
+      }
+    </script>
+    <style>
+      @keyframes confetti-fall {
+        0% {
+          transform: translateY(-10vh) rotateZ(0deg);
+          opacity: 1;
+        }
+        100% {
+          transform: translateY(110vh) rotateZ(720deg);
+          opacity: 0;
+        }
+      }
+      .confetti {
+        animation-name: confetti-fall;
+        animation-timing-function: linear;
+        animation-duration: 4s;
+        animation-fill-mode: forwards;
+      }
+      
+      /* Animated Background Styles */
+      body {
+        background-color: #020617; /* A very dark slate/blue */
+        position: relative;
+        overflow: hidden;
+      }
+
+      .gradient-bg {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 0;
+        pointer-events: none;
+      }
+
+      .gradient-bg::before,
+      .gradient-bg::after {
+        content: '';
+        position: absolute;
+        width: 50vmax;
+        height: 50vmax;
+        border-radius: 50%;
+        filter: blur(100px);
+        opacity: 0.2;
+        will-change: transform;
+      }
+
+      .gradient-bg::before {
+        background-color: #0891b2; /* cyan-600 */
+        top: -15%;
+        left: -15%;
+        animation: move-gradient-1 25s cubic-bezier(0.45, 0, 0.55, 1) alternate infinite;
+      }
+
+      .gradient-bg::after {
+        background-color: #a855f7; /* purple-500 */
+        bottom: -15%;
+        right: -15%;
+        animation: move-gradient-2 30s cubic-bezier(0.45, 0, 0.55, 1) alternate infinite;
+      }
+
+      @keyframes move-gradient-1 {
+        0% { transform: translate(0, 0) rotate(0deg) scale(1); }
+        100% { transform: translate(10vw, 20vh) rotate(90deg) scale(1.2); }
+      }
+
+      @keyframes move-gradient-2 {
+        0% { transform: translate(0, 0) rotate(0deg) scale(1.2); }
+        100% { transform: translate(-20vw, -10vh) rotate(-70deg) scale(1); }
+      }
+    </style>
+  <link rel="stylesheet" href="/index.css">
+</head>
+  <body class="text-white h-full">
+    <div class="gradient-bg"></div>
+    <div id="root" class="h-full relative z-10"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
