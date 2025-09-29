@@ -227,6 +227,8 @@
     const lastRotationRef = useRef(0);
     const pointerRotationRef = useRef(0);
     const pointerVelocityRef = useRef(0);
+    const peakRotationRef = useRef(0);
+    const isReversingRef = useRef(false);
     const animationFrameRef = useRef(null);
     const audioContextRef = useRef(null);
 
@@ -314,6 +316,22 @@
           }
           velocity *= 0.96;
         }
+        
+        if (velocityRef.current >= 0 && velocity < 0) {
+          if (!isReversingRef.current) {
+            isReversingRef.current = true;
+            peakRotationRef.current = rotationRef.current;
+          }
+        }
+
+        if (isReversingRef.current) {
+          const reversedDistance = peakRotationRef.current - (rotationRef.current + velocity);
+          const limit = segmentAngle / 2;
+          if (reversedDistance > limit) {
+            velocity = (peakRotationRef.current - limit) - rotationRef.current;
+            isReversingRef.current = false;
+          }
+        }
 
         if (Math.abs(velocity) < STOP_VELOCITY) {
           settlingRef.current = true;
@@ -323,6 +341,7 @@
           velocity = 0;
           isSpinningRef.current = false;
           settlingRef.current = false;
+          isReversingRef.current = false;
           setIsSpinning(false);
           const finalRotation = rotationRef.current;
           const degrees = (180 - (finalRotation % 360) + 360) % 360;
@@ -356,6 +375,7 @@
       }
       isSpinningRef.current = true;
       settlingRef.current = false;
+      isReversingRef.current = false;
       setIsSpinning(true);
       velocityRef.current = Math.random() * 15 + 25;
       lastRotationRef.current = rotationRef.current;

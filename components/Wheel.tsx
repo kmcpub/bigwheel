@@ -19,6 +19,8 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
   const lastRotationRef = useRef(0);
   const pointerRotationRef = useRef(0);
   const pointerVelocityRef = useRef(0);
+  const peakRotationRef = useRef(0);
+  const isReversingRef = useRef(false);
   const animationFrameRef = useRef<number | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
 
@@ -129,6 +131,26 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
           velocity *= 0.96; // 못 저항 증가
         }
         
+        // 역회전 감지 및 제한
+        if (velocityRef.current >= 0 && velocity < 0) {
+          // 역회전 시작
+          if (!isReversingRef.current) {
+            isReversingRef.current = true;
+            peakRotationRef.current = rotationRef.current; // 최대 회전 위치 기록
+          }
+        }
+
+        if (isReversingRef.current) {
+          const reversedDistance = peakRotationRef.current - (rotationRef.current + velocity);
+          const limit = segmentAngle / 2;
+
+          if (reversedDistance > limit) {
+            // 제한 초과. 역회전을 멈추기 위해 속도를 조정합니다.
+            velocity = (peakRotationRef.current - limit) - rotationRef.current;
+            isReversingRef.current = false; // 더 이상 역회전 상태가 아님
+          }
+        }
+        
         if (Math.abs(velocity) < STOP_VELOCITY) {
             settlingRef.current = true;
         }
@@ -137,6 +159,7 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
             velocity = 0; // 최종 정지
             isSpinningRef.current = false;
             settlingRef.current = false;
+            isReversingRef.current = false;
             setIsSpinning(false);
             
             const finalRotation = rotationRef.current;
@@ -175,6 +198,7 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
     
     isSpinningRef.current = true;
     settlingRef.current = false;
+    isReversingRef.current = false;
     setIsSpinning(true);
     
     velocityRef.current = Math.random() * 15 + 25;
