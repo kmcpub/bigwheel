@@ -41,7 +41,8 @@ const ScreenPickerModal: React.FC<ScreenPickerModalProps> = ({ show, screens, on
               className="w-full text-left p-4 bg-slate-700 hover:bg-slate-600 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500"
             >
               <div className="font-bold text-lg text-gray-100">
-                모니터 {index + 1} {screen.isPrimary && <span className="text-xs font-normal bg-cyan-500 text-slate-900 px-2 py-0.5 rounded-full ml-2">기본</span>}
+                {screen.label || `모니터 ${index + 1}`}
+                {screen.isPrimary && <span className="text-xs font-normal bg-cyan-500 text-slate-900 px-2 py-0.5 rounded-full ml-2">기본</span>}
               </div>
               <div className="text-sm text-gray-400">
                 해상도: {screen.width} x {screen.height}

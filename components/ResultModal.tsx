@@ -1,14 +1,24 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { WHEEL_COLORS } from '../constants';
 
-interface ConfettiPieceProps {
+interface ConfettiState {
+  id: number;
   style: React.CSSProperties;
 }
 
-const ConfettiPiece: React.FC<ConfettiPieceProps> = ({ style }) => (
-  <div className="absolute w-2 h-4 rounded-sm confetti" style={style}></div>
-);
+interface ConfettiPieceProps {
+  id: number;
+  style: React.CSSProperties;
+  onAnimationEnd: (id: number) => void;
+}
 
+const ConfettiPiece: React.FC<ConfettiPieceProps> = ({ id, style, onAnimationEnd }) => (
+  <div 
+    className="absolute w-2 h-4 rounded-sm confetti" 
+    style={style}
+    onAnimationEnd={() => onAnimationEnd(id)}
+  ></div>
+);
 
 interface ResultModalProps {
   winner: string | null;
@@ -16,32 +26,52 @@ interface ResultModalProps {
 }
 
 const ResultModal: React.FC<ResultModalProps> = ({ winner, onClose }) => {
-  const [confetti, setConfetti] = useState<React.ReactElement[]>([]);
+  const [confetti, setConfetti] = useState<ConfettiState[]>([]);
   const [isVisible, setIsVisible] = useState(false);
+  const nextId = useRef(0);
 
+  const handleConfettiAnimationEnd = useCallback((id: number) => {
+    setConfetti(current => current.filter(c => c.id !== id));
+  }, []);
+  
   useEffect(() => {
+    // FIX: Replaced NodeJS.Timeout with ReturnType<typeof setInterval> to use the correct return type
+    // for setInterval in the current environment (which is `number` in the browser).
+    let interval: ReturnType<typeof setInterval> | null = null;
     if (winner) {
       setIsVisible(true);
       
-      // 색종이 생성
-      const newConfetti = Array.from({ length: 150 }).map((_, i) => {
-        const style = {
-          left: `${Math.random() * 100}%`,
-          backgroundColor: WHEEL_COLORS[Math.floor(Math.random() * WHEEL_COLORS.length)],
-          animationDelay: `${Math.random() * 2}s`,
-          transform: `rotate(${Math.random() * 360}deg)`
-        };
-        return <ConfettiPiece key={i} style={style} />;
-      });
-      setConfetti(newConfetti);
+      const addConfetti = () => {
+        const newPieces: ConfettiState[] = Array.from({ length: 10 }).map(() => {
+            const id = nextId.current++;
+            return {
+                id,
+                style: {
+                    left: `${Math.random() * 100}%`,
+                    backgroundColor: WHEEL_COLORS[Math.floor(Math.random() * WHEEL_COLORS.length)],
+                    animationDuration: `${Math.random() * 2 + 3}s`,
+                    transform: `rotate(${Math.random() * 360}deg)`,
+                    animationDelay: '0s',
+                },
+            };
+        });
+        setConfetti(current => [...current, ...newPieces]);
+      }
+      
+      interval = setInterval(addConfetti, 100);
+
     } else {
       setIsVisible(false);
     }
+    
+    return () => {
+      if(interval) clearInterval(interval);
+    }
   }, [winner]);
   
-  const handleAnimationEnd = () => {
+  const handleTransitionEnd = () => {
     if (!winner) {
-        setConfetti([]); // 애니메이션이 끝나고 모달이 닫히면 색종이 제거
+        setConfetti([]); // 모달 닫힘 애니메이션이 끝나면 색종이를 모두 제거합니다.
     }
   }
 
@@ -53,10 +83,17 @@ const ResultModal: React.FC<ResultModalProps> = ({ winner, onClose }) => {
     <div 
         className={`fixed inset-0 bg-black flex items-center justify-center z-50 p-4 transition-opacity duration-300 ${isVisible ? 'bg-opacity-75' : 'bg-opacity-0 pointer-events-none'}`}
         onClick={onClose}
-        onTransitionEnd={handleAnimationEnd}
+        onTransitionEnd={handleTransitionEnd}
     >
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {confetti}
+        {confetti.map(c => 
+          <ConfettiPiece 
+            key={c.id} 
+            id={c.id} 
+            style={c.style} 
+            onAnimationEnd={handleConfettiAnimationEnd} 
+          />
+        )}
       </div>
       <div 
         className={`transform transition-all duration-700 ease-out ${isVisible ? 'scale-100 opacity-100' : 'scale-125 opacity-0'}`}

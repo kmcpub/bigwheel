@@ -17,31 +17,53 @@
   };
 
   // --- START OF components/ResultModal.tsx ---
-  const ConfettiPiece = ({ style }) => createElement("div", { className: "absolute w-2 h-4 rounded-sm confetti", style: style });
+  const ConfettiPiece = ({ id, style, onAnimationEnd }) => (
+    createElement("div", {
+      className: "absolute w-2 h-4 rounded-sm confetti",
+      style: style,
+      onAnimationEnd: () => onAnimationEnd(id)
+    })
+  );
 
   const ResultModal = ({ winner, onClose }) => {
     const [confetti, setConfetti] = useState([]);
     const [isVisible, setIsVisible] = useState(false);
+    const nextId = useRef(0);
+
+    const handleConfettiAnimationEnd = useCallback((id) => {
+      setConfetti(current => current.filter(c => c.id !== id));
+    }, []);
 
     useEffect(() => {
+      let interval = null;
       if (winner) {
         setIsVisible(true);
-        const newConfetti = Array.from({ length: 150 }).map((_, i) => {
-          const style = {
-            left: `${Math.random() * 100}%`,
-            backgroundColor: WHEEL_COLORS[Math.floor(Math.random() * WHEEL_COLORS.length)],
-            animationDelay: `${Math.random() * 2}s`,
-            transform: `rotate(${Math.random() * 360}deg)`
-          };
-          return createElement(ConfettiPiece, { key: i, style: style });
-        });
-        setConfetti(newConfetti);
+        const addConfetti = () => {
+          const newPieces = Array.from({ length: 10 }).map(() => {
+            const id = nextId.current++;
+            return {
+              id,
+              style: {
+                left: `${Math.random() * 100}%`,
+                backgroundColor: WHEEL_COLORS[Math.floor(Math.random() * WHEEL_COLORS.length)],
+                animationDuration: `${Math.random() * 2 + 3}s`,
+                transform: `rotate(${Math.random() * 360}deg)`,
+                animationDelay: '0s',
+              },
+            };
+          });
+          setConfetti(current => [...current, ...newPieces]);
+        };
+        interval = setInterval(addConfetti, 100);
       } else {
         setIsVisible(false);
       }
+      return () => {
+        if (interval) clearInterval(interval);
+      };
     }, [winner]);
 
-    const handleAnimationEnd = () => {
+    const handleTransitionEnd = () => {
       if (!winner) {
         setConfetti([]);
       }
@@ -54,9 +76,18 @@
     return createElement("div", {
         className: `fixed inset-0 bg-black flex items-center justify-center z-50 p-4 transition-opacity duration-300 ${isVisible ? 'bg-opacity-75' : 'bg-opacity-0 pointer-events-none'}`,
         onClick: onClose,
-        onTransitionEnd: handleAnimationEnd
+        onTransitionEnd: handleTransitionEnd
       },
-      createElement("div", { className: "absolute inset-0 overflow-hidden pointer-events-none" }, confetti),
+      createElement("div", { className: "absolute inset-0 overflow-hidden pointer-events-none" },
+        confetti.map(c =>
+          createElement(ConfettiPiece, {
+            key: c.id,
+            id: c.id,
+            style: c.style,
+            onAnimationEnd: handleConfettiAnimationEnd
+          })
+        )
+      ),
       createElement("div", {
           className: `transform transition-all duration-700 ease-out ${isVisible ? 'scale-100 opacity-100' : 'scale-125 opacity-0'}`,
           onClick: (e) => e.stopPropagation()
@@ -99,7 +130,7 @@
                 className: "w-full text-left p-4 bg-slate-700 hover:bg-slate-600 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500"
               },
               createElement("div", { className: "font-bold text-lg text-gray-100" },
-                `모니터 ${index + 1} `,
+                screen.label || `모니터 ${index + 1}`,
                 screen.isPrimary && createElement("span", { className: "text-xs font-normal bg-cyan-500 text-slate-900 px-2 py-0.5 rounded-full ml-2" }, "기본")
               ),
               createElement("div", { className: "text-sm text-gray-400" },
@@ -201,11 +232,12 @@
 
     const colorMap = useMemo(() => {
       const map = new Map();
-      const uniqueItems = [...new Set(items)];
+      const uniqueItems = Array.from(new Set(items));
       const numUnique = uniqueItems.length;
+      const numColors = WHEEL_COLORS.length;
       if (numUnique === 0) return map;
       uniqueItems.forEach((item, index) => {
-        const colorIndex = index % WHEEL_COLORS.length;
+        const colorIndex = index % numColors;
         map.set(item, WHEEL_COLORS[colorIndex]);
       });
       return map;
@@ -240,11 +272,11 @@
       pointerVelocityRef.current *= POINTER_DAMPING;
       pointerRotationRef.current += pointerVelocityRef.current;
       setPointerRotation(pointerRotationRef.current);
-
+      
       if (isSpinningRef.current) {
-        const FRICTION = 0.996;
+        const FRICTION = 0.995;
         const GRAVITY_FACTOR = 0.0012;
-        const MIN_VELOCITY_FOR_GRAVITY = 2.8;
+        const MIN_VELOCITY_FOR_GRAVITY = 2.0;
         const STOP_VELOCITY = 0.005;
 
         let velocity = velocityRef.current * FRICTION;
@@ -277,7 +309,8 @@
             if (pointerRotationRef.current > 0) pointerRotationRef.current = 0;
             pointerVelocityRef.current = -kickVelocity;
           }
-          velocity *= 0.97;
+
+          velocity *= 0.96;
         }
         
         if (Math.abs(velocity) < STOP_VELOCITY) {
@@ -376,14 +409,14 @@
       createElement("div", {
         className: "absolute left-1/2 -translate-x-1/2 z-20",
         style: {
-          width: '8%', height: '12%', top: '-10%',
+          width: '8%', height: '12%', top: '-11%',
           filter: 'drop-shadow(0 4px 3px rgb(0 0 0 / 0.3))',
           transform: `rotate(${pointerRotation}deg)`,
           transformOrigin: '50% 41.66%'
         }
       },
         createElement("svg", { width: "100%", height: "100%", viewBox: "0 0 40 60", fill: "none", xmlns: "http://www.w3.org/2000/svg" },
-          createElement("path", { d: "M20 60C20 60 40 35.8333 40 25C40 11.1929 31.0457 0 20 0C8.9543 0 0 11.1929 0 25C0 35.8333 20 60 20 60Z", fill: "#facc15" }),
+          createElement("path", { d: "M20 0C8.9543 0 0 11.1929 0 25C0 35.8333 15 45 15 45L20 60L25 45C25 45 40 35.8333 40 25C40 11.1929 31.0457 0 20 0Z", fill: "#facc15" }),
           createElement("circle", { cx: "20", cy: "25", r: "5", fill: "#eab308" })
         )
       ),
@@ -514,10 +547,10 @@
             "aria-label": isFullscreen ? "전체 화면 종료" : "전체 화면 시작"
           }, isFullscreen ?
             createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-6 w-6", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2 },
-              createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 1v4m0 0h-4m4 0l-5-5" })
+              createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M9 9L4 4m0 0v4m0-4h4M15 9l5-5m0 0v4m0-4h-4M9 15l-5 5m0 0v-4m0 4h4M15 15l5 5m0 0v-4m0 4h-4" })
             ) :
             createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-6 w-6", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2 },
-              createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M4 8V4m0 0h4M4 4l5 5m7-5h4m0 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m7 5h4m0 0v4m0-4l-5-5" })
+              createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M4 8V4m0 0h4M4 4l5 5M20 8V4m0 0h-4M20 4l-5 5M4 16v4m0 0h4M4 20l5-5M20 16v4m0 0h-4M20 20l-5-5" })
             )
           ),
           !isFullscreen && 'getScreenDetails' in window && createElement("button", {

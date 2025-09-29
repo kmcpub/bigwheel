@@ -25,13 +25,14 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
   // 고유 항목에 일관되고 분산된 색상을 매핑합니다.
   const colorMap = useMemo(() => {
     const map = new Map<string, string>();
-    // FIX: The spread operator on a Set was inferring `unknown[]`. Using `Array.from` correctly infers `string[]`.
-    const uniqueItems: string[] = Array.from(new Set(items));
+    const uniqueItems: string[] = Array.from(new Set<string>(items));
     const numUnique = uniqueItems.length;
+    const numColors = WHEEL_COLORS.length;
     if (numUnique === 0) return map;
 
     uniqueItems.forEach((item, index) => {
-      const colorIndex = index % WHEEL_COLORS.length;
+      // 순차적으로 색상을 할당하여 무지개 효과를 만듭니다.
+      const colorIndex = index % numColors;
       map.set(item, WHEEL_COLORS[colorIndex]);
     });
     return map;
@@ -68,7 +69,7 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
     const POINTER_STIFFNESS = 0.3;
     const POINTER_DAMPING = 0.85;
     
-    // 포인터 애니메이션 (항상 실행하여 제자리로 돌아오게 함)
+    // 포인터 회전 물리
     const restoringForce = -pointerRotationRef.current * POINTER_STIFFNESS;
     pointerVelocityRef.current += restoringForce;
     pointerVelocityRef.current *= POINTER_DAMPING;
@@ -78,9 +79,9 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
     // 돌림판 애니메이션
     if (isSpinningRef.current) {
         // 돌림판 물리 상수
-        const FRICTION = 0.996;
+        const FRICTION = 0.995; // 마찰력 증가로 더 빠른 감속
         const GRAVITY_FACTOR = 0.0012;
-        const MIN_VELOCITY_FOR_GRAVITY = 2.8;
+        const MIN_VELOCITY_FOR_GRAVITY = 2.0; // 중력 효과 발동 속도 하향 조정
         const STOP_VELOCITY = 0.005;
 
         let velocity = velocityRef.current * FRICTION;
@@ -89,9 +90,7 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
         if (Math.abs(velocity) < MIN_VELOCITY_FOR_GRAVITY) {
             const currentRotation = rotationRef.current + velocity;
             
-            // 포인터는 180도에 위치합니다. 따라서 휠 세그먼트가 180도에 정렬되도록 중력 효과를 계산합니다.
             const rotationAtPointer = currentRotation - 180.0;
-            // 포인터 위치에서의 세그먼트 내 각도 (항상 양수 값 유지)
             const angleInSegment = ((rotationAtPointer % segmentAngle) + segmentAngle) % segmentAngle;
 
             const distanceFromCenter = angleInSegment - (segmentAngle / 2);
@@ -99,10 +98,7 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
             velocity += force;
         }
 
-        // 포인터와 페그(못) 상호작용
         const nextRotation = rotationRef.current + velocity;
-        // 포인터는 180도에 위치하므로, 회전 값을 180도만큼 오프셋하여 페그가 포인터를 지나는 시점을 정확히 감지합니다.
-        // 이렇게 하면 페그가 180도 라인을 통과할 때마다 세그먼트 인덱스가 변경됩니다.
         const pointerOffset = 180.0;
         const lastSegmentIndex = Math.floor((rotationRef.current - pointerOffset) / segmentAngle);
         const currentSegmentIndex = Math.floor((nextRotation - pointerOffset) / segmentAngle);
@@ -111,34 +107,23 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
           playTickSound();
           const kickDirection = Math.sign(velocity) || (currentSegmentIndex > lastSegmentIndex ? 1 : -1);
 
-          // 1. 튕기는 강도를 돌림판 속도에 따라 결정
+          // 포인터 회전 물리 업데이트
           const bounceStrength = Math.abs(velocity);
           const kickVelocity = 12 + bounceStrength * 1.5;
 
-          // 2. 시계 방향 충돌 처리
           if (kickDirection > 0) {
-              // 포인터가 못을 '뚫고' 들어갔다면 즉시 밖으로 밀어냄
-              if (pointerRotationRef.current < 0) {
-                  pointerRotationRef.current = 0;
-              }
-              // 항상 못의 바깥 방향으로 튕겨내는 힘을 적용
+              if (pointerRotationRef.current < 0) pointerRotationRef.current = 0;
               pointerVelocityRef.current = kickVelocity;
           } 
-          // 3. 반시계 방향 충돌 처리 (반동 시)
-          else { // kickDirection < 0
-              // 포인터가 반대쪽에서 못을 '뚫고' 들어갔다면 즉시 밖으로 밀어냄
-              if (pointerRotationRef.current > 0) {
-                  pointerRotationRef.current = 0;
-              }
-              // 항상 못의 바깥 방향으로 튕겨내는 힘을 적용
+          else {
+              if (pointerRotationRef.current > 0) pointerRotationRef.current = 0;
               pointerVelocityRef.current = -kickVelocity;
           }
 
-          // 4. 돌림판에 저항 적용
-          velocity *= 0.97;
+          // 돌림판에 저항 적용
+          velocity *= 0.96; // 못 저항 증가
         }
         
-        // 새로운 정지 로직: 안정화 단계를 거쳐 최종적으로 정지할 때 승자 판정
         if (Math.abs(velocity) < STOP_VELOCITY) {
             settlingRef.current = true;
         }
@@ -150,7 +135,6 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
             setIsSpinning(false);
             
             const finalRotation = rotationRef.current;
-            // 포인터가 180도에 있으므로, 해당 위치를 기준으로 당첨자를 계산합니다.
             const degrees = (180 - (finalRotation % 360) + 360) % 360;
             const winningSegmentIndex = Math.floor(degrees / segmentAngle);
             if (items[winningSegmentIndex]) {
@@ -185,7 +169,7 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
     }
     
     isSpinningRef.current = true;
-    settlingRef.current = false; // 안정화 단계 초기화
+    settlingRef.current = false;
     setIsSpinning(true);
     
     velocityRef.current = Math.random() * 15 + 25;
@@ -255,16 +239,16 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
         <div 
             className="absolute left-1/2 -translate-x-1/2 z-20"
             style={{ 
-                width: '8%', // 40px/500px
-                height: '12%', // 60px/500px
-                top: '-10%', // -50px/500px, to place tip on pegs
+                width: '8%', 
+                height: '12%', 
+                top: '-11%', // 겹침 방지를 위해 포인터를 약간 위로 이동
                 filter: 'drop-shadow(0 4px 3px rgb(0 0 0 / 0.3))',
                 transform: `rotate(${pointerRotation}deg)`,
-                transformOrigin: '50% 41.66%' // 25px / 60px
+                transformOrigin: '50% 41.66%'
             }}
         >
              <svg width="100%" height="100%" viewBox="0 0 40 60" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M20 60C20 60 40 35.8333 40 25C40 11.1929 31.0457 0 20 0C8.9543 0 0 11.1929 0 25C0 35.8333 20 60 20 60Z" fill="#facc15"/>
+                <path d="M20 0C8.9543 0 0 11.1929 0 25C0 35.8333 15 45 15 45L20 60L25 45C25 45 40 35.8333 40 25C40 11.1929 31.0457 0 20 0Z" fill="#facc15"/>
                 <circle cx="20" cy="25" r="5" fill="#eab308"/>
             </svg>
         </div>
