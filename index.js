@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const { useState, useCallback, useEffect, useRef, useMemo, StrictMode, createElement } = React;
+  const { useState, useCallback, useEffect, useRef, useMemo, StrictMode, createElement, Fragment } = React;
 
   // --- START OF constants.ts ---
   const WHEEL_COLORS = [
@@ -108,7 +108,7 @@
       onItemsChange(newItems);
     }, [onItemsChange]);
 
-    return createElement("div", { className: "bg-slate-800 p-6 rounded-lg shadow-2xl h-full flex flex-col" },
+    return createElement("div", { className: "bg-slate-800 p-6 rounded-lg shadow-2xl h-full flex flex-col overflow-y-auto" },
       createElement("h2", { className: "text-2xl font-bold mb-4 text-cyan-400" }, "돌림판 설정"),
       createElement("div", { className: "mb-4" },
         createElement("h3", { className: "font-semibold mb-2 text-gray-300" }, "미리 설정된 목록"),
@@ -123,7 +123,8 @@
         createElement("textarea", {
           id: "items", value: text, onChange: handleTextChange, onCompositionStart: handleCompositionStart, onCompositionEnd: handleCompositionEnd,
           className: "w-full flex-grow bg-slate-700 text-gray-200 p-3 rounded-md border-2 border-slate-600 focus:border-cyan-500 focus:outline-none focus:ring-0 transition-colors",
-          placeholder: "항목 1\n항목 2\n항목 3"
+          placeholder: "항목 1\n항목 2\n항목 3",
+          rows: 5
         }),
         createElement("p", { className: "text-sm text-gray-500 mt-1" }, `${initialItems.length} 개 항목`)
       ),
@@ -383,6 +384,15 @@
       return PRESET_ITEMS.participants;
     });
     const [winner, setWinner] = useState(null);
+    const [isFullscreen, setIsFullscreen] = useState(false);
+
+    useEffect(() => {
+      const handleFullscreenChange = () => {
+        setIsFullscreen(!!document.fullscreenElement);
+      };
+      document.addEventListener('fullscreenchange', handleFullscreenChange);
+      return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    }, []);
 
     useEffect(() => {
       try {
@@ -397,20 +407,44 @@
     const handleSpinEnd = useCallback((selectedItem) => { setWinner(selectedItem); }, []);
     const handleCloseModal = useCallback(() => { setWinner(null); }, []);
 
-    return createElement("div", { className: "h-screen text-gray-100 flex flex-col items-center p-4 font-sans overflow-hidden" },
-      createElement("header", { className: "w-full max-w-7xl text-center mb-4 flex-shrink-0" },
-        createElement("h1", { className: "text-4xl md:text-5xl font-bold text-cyan-400 tracking-wider" }, "돌려돌려~ 돌림판!"),
-        createElement("p", { className: "text-gray-400 mt-2" }, "햇반 뽑기 시스템")
-      ),
-      createElement("main", { className: "w-full max-w-7xl flex-grow flex flex-col lg:flex-row gap-8 items-stretch" },
-        createElement("div", { className: "w-full lg:w-2/3 flex items-center justify-center" },
-          createElement(Wheel, { items: items, onSpinEnd: handleSpinEnd })
+    const toggleFullscreen = useCallback(() => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => {
+          alert(`전체 화면 모드를 시작할 수 없습니다: ${err.message} (${err.name})`);
+        });
+      } else {
+        document.exitFullscreen();
+      }
+    }, []);
+
+    return createElement(Fragment, null,
+      createElement("div", { className: "h-screen text-gray-100 flex flex-col items-center p-4 font-sans overflow-hidden" },
+        createElement("header", { className: "w-full max-w-7xl text-center mb-4 flex-shrink-0" },
+          createElement("h1", { className: "text-4xl md:text-5xl font-bold text-cyan-400 tracking-wider" }, "돌려돌려~ 돌림판!"),
+          createElement("p", { className: "text-gray-400 mt-2" }, "햇반 뽑기 시스템")
         ),
-        createElement("div", { className: "w-full lg:w-1/3 flex flex-col" },
-          createElement(Controls, { initialItems: items, onItemsChange: handleItemsChange, onShuffle: handleShuffle })
-        )
+        createElement("main", { className: "w-full max-w-7xl flex-grow flex flex-col lg:flex-row gap-8 items-stretch min-h-0" },
+          createElement("div", { className: "w-full lg:w-2/3 flex items-center justify-center" },
+            createElement(Wheel, { items: items, onSpinEnd: handleSpinEnd })
+          ),
+          createElement("div", { className: "w-full lg:w-1/3 flex flex-col min-h-0" },
+            createElement(Controls, { initialItems: items, onItemsChange: handleItemsChange, onShuffle: handleShuffle })
+          )
+        ),
+        createElement(ResultModal, { winner: winner, onClose: handleCloseModal })
       ),
-      createElement(ResultModal, { winner: winner, onClose: handleCloseModal })
+      createElement("button", {
+        onClick: toggleFullscreen,
+        className: "fixed bottom-4 right-4 z-30 bg-slate-700 hover:bg-slate-600 text-white font-bold w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-colors",
+        "aria-label": isFullscreen ? "전체 화면 종료" : "전체 화면 시작"
+      }, isFullscreen ?
+        createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-6 w-6", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2 },
+          createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 1v4m0 0h-4m4 0l-5-5" })
+        ) :
+        createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-6 w-6", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2 },
+          createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M4 8V4m0 0h4M4 4l5 5m7-5h4m0 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m7 5h4m0 0v4m0-4l-5-5" })
+        )
+      )
     );
   };
 

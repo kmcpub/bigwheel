@@ -54,7 +54,7 @@ const Controls: React.FC<ControlsProps> = ({ initialItems, onItemsChange, onShuf
   }, [onItemsChange]);
 
   return (
-    <div className="bg-slate-800 p-6 rounded-lg shadow-2xl h-full flex flex-col">
+    <div className="bg-slate-800 p-6 rounded-lg shadow-2xl h-full flex flex-col overflow-y-auto">
       <h2 className="text-2xl font-bold mb-4 text-cyan-400">돌림판 설정</h2>
       
       <div className="mb-4">
@@ -78,6 +78,7 @@ const Controls: React.FC<ControlsProps> = ({ initialItems, onItemsChange, onShuf
           onCompositionEnd={handleCompositionEnd}
           className="w-full flex-grow bg-slate-700 text-gray-200 p-3 rounded-md border-2 border-slate-600 focus:border-cyan-500 focus:outline-none focus:ring-0 transition-colors"
           placeholder="항목 1&#10;항목 2&#10;항목 3"
+          rows={5}
         />
         <p className="text-sm text-gray-500 mt-1">
           {initialItems.length} 개 항목
