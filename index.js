@@ -495,8 +495,73 @@
     );
   };
   
+  // --- EditableText Component ---
+  const EditableText = ({ initialValue, onSave, className, as: Component, ariaLabel }) => {
+    const [isEditing, setIsEditing] = useState(false);
+    const [value, setValue] = useState(initialValue);
+    const inputRef = useRef(null);
+
+    useEffect(() => {
+      setValue(initialValue);
+    }, [initialValue]);
+
+    useEffect(() => {
+      if (isEditing && inputRef.current) {
+        inputRef.current.focus();
+        inputRef.current.select();
+      }
+    }, [isEditing]);
+
+    const handleSave = useCallback(() => {
+      const trimmedValue = value.trim();
+      if (trimmedValue === '') {
+        setValue(initialValue);
+      } else if (trimmedValue !== initialValue) {
+        onSave(trimmedValue);
+      }
+      setIsEditing(false);
+    }, [value, initialValue, onSave]);
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Enter') {
+        handleSave();
+      } else if (event.key === 'Escape') {
+        setValue(initialValue);
+        setIsEditing(false);
+      }
+    };
+    
+    const handleClick = () => {
+      if (!isEditing) {
+        setIsEditing(true);
+      }
+    };
+
+    if (isEditing) {
+      return createElement("input", {
+        ref: inputRef,
+        type: "text",
+        value: value,
+        onChange: (e) => setValue(e.target.value),
+        onBlur: handleSave,
+        onKeyDown: handleKeyDown,
+        className: `${className} bg-transparent border-b-2 border-cyan-400 outline-none w-full text-center`,
+        "aria-label": ariaLabel,
+      });
+    }
+
+    return createElement(Component, {
+      className: `${className} cursor-pointer hover:bg-slate-700/50 rounded-md px-2 transition-colors`,
+      onClick: handleClick,
+      title: "클릭하여 수정",
+    }, value || initialValue);
+  };
+  
   // --- START OF App.tsx ---
   const App = () => {
+    const [title, setTitle] = useState(() => localStorage.getItem('spinningWheelTitle') || '돌려돌려~ 돌림판!');
+    const [subtitle, setSubtitle] = useState(() => localStorage.getItem('spinningWheelSubtitle') || '햇반 뽑기 시스템');
+
     const [items, setItems] = useState(() => {
       try {
         const savedItems = localStorage.getItem('spinningWheelItems');
@@ -524,6 +589,14 @@
       document.addEventListener('fullscreenchange', handleFullscreenChange);
       return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
     }, []);
+    
+    useEffect(() => {
+        localStorage.setItem('spinningWheelTitle', title);
+    }, [title]);
+
+    useEffect(() => {
+        localStorage.setItem('spinningWheelSubtitle', subtitle);
+    }, [subtitle]);
 
     useEffect(() => {
       try {
@@ -587,8 +660,20 @@
     return createElement(Fragment, null,
       createElement("div", { className: "h-dvh text-gray-100 flex flex-col items-center p-4 font-sans overflow-hidden" },
         createElement("header", { className: "w-full max-w-7xl text-center mb-4 flex-shrink-0" },
-          createElement("h1", { className: "text-4xl md:text-5xl font-bold text-cyan-400 tracking-wider" }, "돌려돌려~ 돌림판!"),
-          createElement("p", { className: "text-gray-400 mt-2" }, "햇반 뽑기 시스템")
+          createElement(EditableText, {
+            initialValue: title,
+            onSave: setTitle,
+            as: "h1",
+            className: "text-4xl md:text-5xl font-bold text-cyan-400 tracking-wider",
+            ariaLabel: "타이틀 수정",
+          }),
+          createElement(EditableText, {
+            initialValue: subtitle,
+            onSave: setSubtitle,
+            as: "p",
+            className: "text-gray-400 mt-2",
+            ariaLabel: "부제 수정",
+          })
         ),
         createElement("main", { className: "w-full max-w-7xl flex-grow flex flex-col lg:flex-row gap-8 items-stretch min-h-0" },
           createElement("div", { className: "w-full lg:w-2/3 flex items-center justify-center" },

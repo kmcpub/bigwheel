@@ -1,11 +1,91 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import Wheel from './components/Wheel';
 import Controls from './components/Controls';
 import ResultModal from './components/ResultModal';
 import ScreenPickerModal from './components/ScreenPickerModal';
 import { PRESET_ITEMS } from './constants';
 
+// --- 인라인 편집 가능한 텍스트 컴포넌트 ---
+interface EditableTextProps {
+  initialValue: string;
+  onSave: (newValue: string) => void;
+  className: string;
+  as: 'h1' | 'p';
+  ariaLabel: string;
+}
+
+const EditableText: React.FC<EditableTextProps> = ({ initialValue, onSave, className, as: Component, ariaLabel }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [value, setValue] = useState(initialValue);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setValue(initialValue);
+  }, [initialValue]);
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditing]);
+
+  const handleSave = useCallback(() => {
+    const trimmedValue = value.trim();
+    if (trimmedValue === '') {
+      setValue(initialValue); // 비어 있으면 원래 값으로 되돌립니다.
+    } else if (trimmedValue !== initialValue) {
+      onSave(trimmedValue);
+    }
+    setIsEditing(false);
+  }, [value, initialValue, onSave]);
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      handleSave();
+    } else if (event.key === 'Escape') {
+      setValue(initialValue);
+      setIsEditing(false);
+    }
+  };
+
+  const handleClick = () => {
+    if (!isEditing) {
+      setIsEditing(true);
+    }
+  };
+
+  if (isEditing) {
+    return (
+      <input
+        ref={inputRef}
+        type="text"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={handleSave}
+        onKeyDown={handleKeyDown}
+        className={`${className} bg-transparent border-b-2 border-cyan-400 outline-none w-full text-center`}
+        aria-label={ariaLabel}
+      />
+    );
+  }
+
+  return (
+    <Component
+      className={`${className} cursor-pointer hover:bg-slate-700/50 rounded-md px-2 transition-colors`}
+      onClick={handleClick}
+      title="클릭하여 수정"
+    >
+      {value || initialValue}
+    </Component>
+  );
+};
+
+
 const App: React.FC = () => {
+  const [title, setTitle] = useState<string>(() => localStorage.getItem('spinningWheelTitle') || '돌려돌려~ 돌림판!');
+  const [subtitle, setSubtitle] = useState<string>(() => localStorage.getItem('spinningWheelSubtitle') || '햇반 뽑기 시스템');
+  
   // 로컬 스토리지에서 아이템을 불러오거나 기본값으로 초기화합니다.
   const [items, setItems] = useState<string[]>(() => {
     try {
@@ -38,6 +118,15 @@ const App: React.FC = () => {
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
+
+  // 제목 및 부제 변경 시 로컬 스토리지에 저장
+  useEffect(() => {
+    localStorage.setItem('spinningWheelTitle', title);
+  }, [title]);
+
+  useEffect(() => {
+    localStorage.setItem('spinningWheelSubtitle', subtitle);
+  }, [subtitle]);
 
 
   // 아이템 목록이 변경될 때마다 로컬 스토리지에 저장합니다.
@@ -120,10 +209,20 @@ const App: React.FC = () => {
     <>
       <div className="h-dvh text-gray-100 flex flex-col items-center p-4 font-sans overflow-hidden">
         <header className="w-full max-w-7xl text-center mb-4 flex-shrink-0">
-          <h1 className="text-4xl md:text-5xl font-bold text-cyan-400 tracking-wider">
-            돌려돌려~ 돌림판!
-          </h1>
-          <p className="text-gray-400 mt-2">햇반 뽑기 시스템</p>
+          <EditableText
+            initialValue={title}
+            onSave={setTitle}
+            as="h1"
+            className="text-4xl md:text-5xl font-bold text-cyan-400 tracking-wider"
+            ariaLabel="타이틀 수정"
+          />
+          <EditableText
+            initialValue={subtitle}
+            onSave={setSubtitle}
+            as="p"
+            className="text-gray-400 mt-2"
+            ariaLabel="부제 수정"
+          />
         </header>
 
         <main className="w-full max-w-7xl flex-grow flex flex-col lg:flex-row gap-8 items-stretch min-h-0">
