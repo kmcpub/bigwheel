@@ -428,16 +428,7 @@
     };
 
     const getPointerPosition = useCallback((e) => {
-        if ('touches' in e && e.touches.length > 0) {
-            return { x: e.touches[0].clientX, y: e.touches[0].clientY };
-        }
-        if ('changedTouches' in e && e.changedTouches.length > 0) {
-            return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
-        }
-        if ('clientX' in e) {
-            return { x: e.clientX, y: e.clientY };
-        }
-        return { x: 0, y: 0 };
+        return { x: e.clientX, y: e.clientY };
     }, []);
 
     const getAngleFromEvent = useCallback((e) => {
@@ -451,10 +442,9 @@
         return (angleRad * 180) / Math.PI;
     }, [getPointerPosition]);
     
-    const handleDragMove = useCallback((e) => {
+    const handlePointerMove = useCallback((e) => {
         if (!isDraggingRef.current) return;
-        if (e.cancelable) e.preventDefault();
-
+        
         const currentPointerAngle = getAngleFromEvent(e);
         let deltaAngle = currentPointerAngle - lastPointerAngleRef.current;
         if (deltaAngle > 180) deltaAngle -= 360;
@@ -481,14 +471,15 @@
         lastPointerAngleRef.current = currentPointerAngle;
     }, [getAngleFromEvent]);
 
-    const handleDragEnd = useCallback(() => {
+    const handlePointerUp = useCallback((e) => {
         if (!isDraggingRef.current) return;
         isDraggingRef.current = false;
         
-        window.removeEventListener('mousemove', handleDragMove);
-        window.removeEventListener('mouseup', handleDragEnd);
-        window.removeEventListener('touchmove', handleDragMove);
-        window.removeEventListener('touchend', handleDragEnd);
+        if (wheelContainerRef.current) {
+            wheelContainerRef.current.releasePointerCapture(e.pointerId);
+        }
+        window.removeEventListener('pointermove', handlePointerMove);
+        window.removeEventListener('pointerup', handlePointerUp);
 
         const now = performance.now();
         const recentSamples = velocityHistoryRef.current.filter(sample => now - sample.time < 100);
@@ -500,32 +491,33 @@
                 startSpin(avgVelocity);
             }
         }
-    }, [handleDragMove, startSpin]);
+    }, [handlePointerMove, startSpin]);
 
-    const handleDragStart = useCallback((e) => {
+    const handlePointerDown = useCallback((e) => {
         if (isSpinningRef.current) return;
-        e.preventDefault();
+        
         isDraggingRef.current = true;
         const currentPointerAngle = getAngleFromEvent(e);
         lastPointerAngleRef.current = currentPointerAngle;
         velocityHistoryRef.current = [{ velocity: 0, time: performance.now() }];
-        window.addEventListener('mousemove', handleDragMove, { passive: false });
-        window.addEventListener('mouseup', handleDragEnd);
-        window.addEventListener('touchmove', handleDragMove, { passive: false });
-        window.addEventListener('touchend', handleDragEnd);
-    }, [getAngleFromEvent, handleDragMove, handleDragEnd]);
+        
+        if (wheelContainerRef.current) {
+            wheelContainerRef.current.setPointerCapture(e.pointerId);
+        }
+
+        window.addEventListener('pointermove', handlePointerMove);
+        window.addEventListener('pointerup', handlePointerUp);
+    }, [getAngleFromEvent, handlePointerMove, handlePointerUp]);
 
     useEffect(() => {
       return () => {
         if (animationFrameRef.current) {
           cancelAnimationFrame(animationFrameRef.current);
         }
-        window.removeEventListener('mousemove', handleDragMove);
-        window.removeEventListener('mouseup', handleDragEnd);
-        window.removeEventListener('touchmove', handleDragMove);
-        window.removeEventListener('touchend', handleDragEnd);
+        window.removeEventListener('pointermove', handlePointerMove);
+        window.removeEventListener('pointerup', handlePointerUp);
       };
-    }, [handleDragMove, handleDragEnd]);
+    }, [handlePointerMove, handlePointerUp]);
 
     const getCoordinatesForPercent = (percent) => {
       const x = center + radius * Math.cos(2 * Math.PI * percent);
@@ -564,8 +556,7 @@
     return createElement("div", { 
         ref: wheelContainerRef,
         className: "relative w-full aspect-square flex items-center justify-center cursor-grab active:cursor-grabbing select-none",
-        onMouseDown: handleDragStart,
-        onTouchStart: handleDragStart,
+        onPointerDown: handlePointerDown,
         style: { touchAction: 'none' }
       },
       createElement("div", {
