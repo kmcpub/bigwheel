@@ -24,6 +24,13 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
   const animationFrameRef = useRef<number | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
 
+  // 드래그/스와이프를 위한 Ref
+  const wheelContainerRef = useRef<HTMLDivElement>(null);
+  const isDraggingRef = useRef(false);
+  const lastPointerAngleRef = useRef(0);
+  const velocityHistoryRef = useRef<{ velocity: number; time: number }[]>([]);
+
+
   // 고유 항목에 일관되고 분산된 색상을 매핑합니다.
   const colorMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -203,7 +210,7 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
     animationFrameRef.current = requestAnimationFrame(animate);
   }, [items, onSpinEnd, playTickSound]);
 
-  const handleSpin = () => {
+  const startSpin = useCallback((initialVelocity: number) => {
     if (isSpinningRef.current || items.length < 2) return;
 
     if (!audioContextRef.current) {
@@ -219,21 +226,132 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
     isReversingRef.current = false;
     setIsSpinning(true);
     
-    velocityRef.current = Math.random() * 15 + 25;
-    lastRotationRef.current = rotationRef.current;
-
+    velocityRef.current = initialVelocity;
+    
     if (!animationFrameRef.current) {
       animationFrameRef.current = requestAnimationFrame(animate);
     }
+  }, [animate, items.length]);
+
+  const handleSpin = () => {
+    const randomVelocity = Math.random() * 15 + 25;
+    startSpin(randomVelocity);
   };
   
+  // --- 드래그/스와이프 로직 ---
+
+  const getPointerPosition = useCallback((e: MouseEvent | TouchEvent | React.MouseEvent | React.TouchEvent) => {
+    if ('touches' in e && e.touches.length > 0) {
+      return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }
+    if ('changedTouches' in e && e.changedTouches.length > 0) { // touchend 용
+      return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+    }
+    if ('clientX' in e) {
+      return { x: e.clientX, y: e.clientY };
+    }
+    return { x: 0, y: 0 };
+  }, []);
+
+  const getAngleFromEvent = useCallback((e: MouseEvent | TouchEvent | React.MouseEvent | React.TouchEvent) => {
+    if (!wheelContainerRef.current) return 0;
+    const rect = wheelContainerRef.current.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const { x, y } = getPointerPosition(e);
+    if (x === 0 && y === 0) return lastPointerAngleRef.current; // 위치를 얻을 수 없는 경우
+    const angleRad = Math.atan2(y - centerY, x - centerX);
+    return (angleRad * 180) / Math.PI; // -180에서 180까지의 각도 반환
+  }, [getPointerPosition]);
+
+  const handleDragMove = useCallback((e: MouseEvent | TouchEvent) => {
+    if (!isDraggingRef.current) return;
+    if (e.cancelable) e.preventDefault();
+
+    const currentPointerAngle = getAngleFromEvent(e);
+    let deltaAngle = currentPointerAngle - lastPointerAngleRef.current;
+
+    // 359 -> 1도 같은 각도 경계 처리
+    if (deltaAngle > 180) deltaAngle -= 360;
+    if (deltaAngle < -180) deltaAngle += 360;
+
+    // 드래그하는 동안 휠을 시각적으로 회전시킵니다.
+    const newRotation = rotationRef.current + deltaAngle;
+    rotationRef.current = newRotation;
+    setRotation(newRotation);
+
+    // 속도 계산을 위해 최근 움직임을 추적합니다.
+    const now = performance.now();
+    const lastSample = velocityHistoryRef.current[velocityHistoryRef.current.length - 1];
+    if (lastSample) {
+      const deltaTime = now - lastSample.time;
+      if (deltaTime > 0) {
+        const velocity = deltaAngle / (deltaTime / 16.67); // 프레임당 각도(속도)
+        velocityHistoryRef.current.push({ velocity, time: now });
+        if (velocityHistoryRef.current.length > 5) {
+          velocityHistoryRef.current.shift();
+        }
+      }
+    } else {
+      velocityHistoryRef.current.push({ velocity: 0, time: now });
+    }
+
+    lastPointerAngleRef.current = currentPointerAngle;
+  }, [getAngleFromEvent]);
+
+  const handleDragEnd = useCallback(() => {
+    if (!isDraggingRef.current) return;
+    isDraggingRef.current = false;
+
+    window.removeEventListener('mousemove', handleDragMove);
+    window.removeEventListener('mouseup', handleDragEnd);
+    window.removeEventListener('touchmove', handleDragMove);
+    window.removeEventListener('touchend', handleDragEnd);
+
+    // 마지막 100ms 동안의 평균 속도를 계산하여 회전을 시작합니다.
+    const now = performance.now();
+    const recentSamples = velocityHistoryRef.current.filter(sample => now - sample.time < 100);
+
+    if (recentSamples.length > 1) {
+      const totalVelocity = recentSamples.reduce((acc, sample) => acc + sample.velocity, 0);
+      let avgVelocity = totalVelocity / recentSamples.length;
+      
+      avgVelocity = Math.max(-45, Math.min(45, avgVelocity)); // 속도 제한
+
+      if (Math.abs(avgVelocity) > 1) { // 최소 회전 속도
+        startSpin(avgVelocity);
+      }
+    }
+  }, [handleDragMove, startSpin]);
+
+  const handleDragStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    if (isSpinningRef.current) return;
+    e.preventDefault();
+
+    isDraggingRef.current = true;
+    const currentPointerAngle = getAngleFromEvent(e);
+    lastPointerAngleRef.current = currentPointerAngle;
+    velocityHistoryRef.current = [{ velocity: 0, time: performance.now() }];
+    
+    window.addEventListener('mousemove', handleDragMove, { passive: false });
+    window.addEventListener('mouseup', handleDragEnd);
+    window.addEventListener('touchmove', handleDragMove, { passive: false });
+    window.addEventListener('touchend', handleDragEnd);
+  }, [getAngleFromEvent, handleDragMove, handleDragEnd]);
+
   useEffect(() => {
     return () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
+      // 컴포넌트 언마운트 시 리스너 정리
+      window.removeEventListener('mousemove', handleDragMove);
+      window.removeEventListener('mouseup', handleDragEnd);
+      window.removeEventListener('touchmove', handleDragMove);
+      window.removeEventListener('touchend', handleDragEnd);
     };
-  }, []);
+  }, [handleDragMove, handleDragEnd]);
+
 
   const getCoordinatesForPercent = (percent: number): [number, number] => {
     const x = center + radius * Math.cos(2 * Math.PI * percent);
@@ -282,7 +400,13 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
   };
 
   return (
-    <div className="relative w-full aspect-square flex items-center justify-center">
+    <div 
+        ref={wheelContainerRef}
+        className="relative w-full aspect-square flex items-center justify-center cursor-grab active:cursor-grabbing select-none"
+        onMouseDown={handleDragStart}
+        onTouchStart={handleDragStart}
+        style={{ touchAction: 'none' }} // 모바일에서 스크롤 방지
+    >
         <div 
             className="absolute left-1/2 z-20"
             style={{ 
