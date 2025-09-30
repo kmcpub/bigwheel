@@ -136,13 +136,13 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
           const bounceStrength = Math.abs(velocity);
           const kickVelocity = 12 + bounceStrength * 1.5;
 
-          if (kickDirection > 0) {
-              if (pointerRotationRef.current < 0) pointerRotationRef.current = 0;
-              pointerVelocityRef.current = kickVelocity;
+          if (kickDirection > 0) { // 돌림판이 시계 반대 방향으로 회전
+              if (pointerRotationRef.current > 0) pointerRotationRef.current = 0; // 양수 각도(오른쪽)에 있으면 리셋
+              pointerVelocityRef.current = -kickVelocity; // 왼쪽으로 튕김 (음수 각속도)
           } 
-          else {
-              if (pointerRotationRef.current > 0) pointerRotationRef.current = 0;
-              pointerVelocityRef.current = -kickVelocity;
+          else { // 돌림판이 시계 방향으로 회전
+              if (pointerRotationRef.current < 0) pointerRotationRef.current = 0; // 음수 각도(왼쪽)에 있으면 리셋
+              pointerVelocityRef.current = kickVelocity; // 오른쪽으로 튕김 (양수 각속도)
           }
 
           // 돌림판에 저항 적용
@@ -284,12 +284,12 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
   return (
     <div className="relative w-full aspect-square flex items-center justify-center">
         <div 
-            className="absolute left-1/2 -translate-x-1/2 z-20"
+            className="absolute left-1/2 z-20"
             style={{ 
                 width: '8%', 
                 height: '12%', 
                 top: '-11%', // 겹침 방지를 위해 포인터를 약간 위로 이동
-                transform: `rotate(${pointerRotation}deg)`,
+                transform: `translateX(-50%) rotate(${pointerRotation}deg)`,
                 transformOrigin: '50% 33.33%', // 원의 중심(y=20)에 맞춘 회전 중심
                 filter: 'drop-shadow(0 2px 3px rgba(0, 0, 0, 0.4))' // 그림자 효과 추가
             }}

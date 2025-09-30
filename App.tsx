@@ -118,7 +118,7 @@ const App: React.FC = () => {
 
   return (
     <>
-      <div className="h-screen text-gray-100 flex flex-col items-center p-4 font-sans overflow-hidden">
+      <div className="h-dvh text-gray-100 flex flex-col items-center p-4 font-sans overflow-hidden">
         <header className="w-full max-w-7xl text-center mb-4 flex-shrink-0">
           <h1 className="text-4xl md:text-5xl font-bold text-cyan-400 tracking-wider">
             돌려돌려~ 돌림판!
@@ -130,7 +130,7 @@ const App: React.FC = () => {
           <div className="w-full lg:w-2/3 flex items-center justify-center">
             <Wheel items={wheelItems} onSpinEnd={handleSpinEnd} />
           </div>
-          <div className="w-full lg:w-1/3 flex flex-col min-h-0">
+          <div className="w-full lg:w-1/3 flex flex-col min-h-0 flex-grow">
             <Controls initialItems={items} onItemsChange={handleItemsChange} onShuffle={handleShuffle} />
           </div>
         </main>

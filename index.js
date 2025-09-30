@@ -342,11 +342,11 @@
           const kickVelocity = 12 + bounceStrength * 1.5;
 
           if (kickDirection > 0) {
-            if (pointerRotationRef.current < 0) pointerRotationRef.current = 0;
-            pointerVelocityRef.current = kickVelocity;
-          } else {
             if (pointerRotationRef.current > 0) pointerRotationRef.current = 0;
             pointerVelocityRef.current = -kickVelocity;
+          } else {
+            if (pointerRotationRef.current < 0) pointerRotationRef.current = 0;
+            pointerVelocityRef.current = kickVelocity;
           }
           velocity *= 0.96;
         }
@@ -462,12 +462,12 @@
 
     return createElement("div", { className: "relative w-full aspect-square flex items-center justify-center" },
       createElement("div", {
-        className: "absolute left-1/2 -translate-x-1/2 z-20",
+        className: "absolute left-1/2 z-20",
         style: {
           width: '8%',
           height: '12%',
           top: '-11%',
-          transform: `rotate(${pointerRotation}deg)`,
+          transform: `translateX(-50%) rotate(${pointerRotation}deg)`,
           transformOrigin: '50% 33.33%',
           filter: 'drop-shadow(0 2px 3px rgba(0, 0, 0, 0.4))'
         }
@@ -585,7 +585,7 @@
     };
 
     return createElement(Fragment, null,
-      createElement("div", { className: "h-screen text-gray-100 flex flex-col items-center p-4 font-sans overflow-hidden" },
+      createElement("div", { className: "h-dvh text-gray-100 flex flex-col items-center p-4 font-sans overflow-hidden" },
         createElement("header", { className: "w-full max-w-7xl text-center mb-4 flex-shrink-0" },
           createElement("h1", { className: "text-4xl md:text-5xl font-bold text-cyan-400 tracking-wider" }, "돌려돌려~ 돌림판!"),
           createElement("p", { className: "text-gray-400 mt-2" }, "햇반 뽑기 시스템")
@@ -594,7 +594,7 @@
           createElement("div", { className: "w-full lg:w-2/3 flex items-center justify-center" },
             createElement(Wheel, { items: wheelItems, onSpinEnd: handleSpinEnd })
           ),
-          createElement("div", { className: "w-full lg:w-1/3 flex flex-col min-h-0" },
+          createElement("div", { className: "w-full lg:w-1/3 flex flex-col min-h-0 flex-grow" },
             createElement(Controls, { initialItems: items, onItemsChange: handleItemsChange, onShuffle: handleShuffle })
           )
         ),
