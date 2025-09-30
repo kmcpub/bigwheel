@@ -134,7 +134,7 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
 
           // 포인터 회전 물리 업데이트
           const bounceStrength = Math.abs(velocity);
-          const kickVelocity = 12 + bounceStrength * 1.5;
+          const kickVelocity = 5 + bounceStrength * 2.0;
 
           if (kickDirection > 0) { // 돌림판이 시계 반대 방향으로 회전
               if (pointerRotationRef.current > 0) pointerRotationRef.current = 0; // 양수 각도(오른쪽)에 있으면 리셋

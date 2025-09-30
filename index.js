@@ -339,7 +339,7 @@
           playTickSound();
           const kickDirection = Math.sign(velocity) || (currentSegmentIndex > lastSegmentIndex ? 1 : -1);
           const bounceStrength = Math.abs(velocity);
-          const kickVelocity = 12 + bounceStrength * 1.5;
+          const kickVelocity = 5 + bounceStrength * 2.0;
 
           if (kickDirection > 0) {
             if (pointerRotationRef.current > 0) pointerRotationRef.current = 0;
