@@ -10,12 +10,12 @@
     '#2dd4bf', '#67e8f9', '#60a5fa', '#818cf8', '#a78bfa', '#c084fc',
     '#f472b6', '#fb7185',
   ];
-  const PRESET_ITEMS = {
-    participants: ['철수', '영희', '민준', '서연', '지훈', '하은', '도윤', '유진'],
-    numbers: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'],
-    choices: ['예', '아니오', '아마도', '나중에 다시 물어보기'],
-    '찬반': ['찬성', '반대'],
-  };
+  const DEFAULT_PRESETS = [
+    { id: 'participants', name: '참가자', items: ['철수', '영희', '민준', '서연', '지훈', '하은', '도윤', '유진'] },
+    { id: 'numbers', name: '숫자', items: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'] },
+    { id: 'rps', name: '가위바위보', items: ['가위', '바위', '보'] },
+    { id: 'pros-cons', name: '찬반', items: ['찬성', '반대'] },
+  ];
 
   // --- START OF components/ResultModal.tsx ---
   const ConfettiPiece = ({ id, style, onAnimationEnd }) => (
@@ -168,55 +168,189 @@
 
 
   // --- START OF components/Controls.tsx ---
-  const Controls = ({ initialItems, onItemsChange, onShuffle }) => {
+  const EditablePresetButton = ({ preset, isSelected, onSelect, onNameChange }) => {
+      const [isEditing, setIsEditing] = useState(false);
+      const [value, setValue] = useState(preset.name);
+      const inputRef = useRef(null);
+
+      useEffect(() => {
+          setValue(preset.name);
+      }, [preset.name]);
+
+      useEffect(() => {
+          if (isEditing) {
+              inputRef.current?.focus();
+              inputRef.current?.select();
+          }
+      }, [isEditing]);
+
+      const handleSave = () => {
+          const trimmedValue = value.trim();
+          if (trimmedValue && trimmedValue !== preset.name) {
+              onNameChange(trimmedValue);
+          } else {
+              setValue(preset.name);
+          }
+          setIsEditing(false);
+      };
+
+      const handleKeyDown = (e) => {
+          if (e.key === 'Enter') handleSave();
+          if (e.key === 'Escape') {
+              setValue(preset.name);
+              setIsEditing(false);
+          }
+      };
+
+      const handleClick = () => {
+          if (isSelected && !isEditing) {
+              setIsEditing(true);
+          } else if (!isEditing) {
+              onSelect();
+          }
+      };
+
+      const baseClasses = "text-sm text-white font-semibold py-1 px-3 rounded-full transition-colors flex-shrink-0";
+      const selectedClasses = isSelected ? "ring-2 ring-cyan-400 bg-violet-700" : "bg-violet-500 hover:bg-violet-600";
+      
+      if (isEditing) {
+          return (
+              createElement("div", { className: `${baseClasses} ${selectedClasses} inline-flex items-center justify-center` },
+                   createElement("input", {
+                      ref: inputRef,
+                      type: "text",
+                      value: value,
+                      onChange: (e) => setValue(e.target.value),
+                      onBlur: handleSave,
+                      onKeyDown: handleKeyDown,
+                      className: "bg-transparent outline-none text-center p-0 m-0 w-24",
+                      onClick: (e) => e.stopPropagation()
+                  })
+              )
+          )
+      }
+
+      return (
+          createElement("button", {
+              onClick: handleClick,
+              className: `${baseClasses} ${selectedClasses}`,
+              title: isSelected ? "이름을 수정하려면 다시 클릭하세요" : preset.name
+          }, preset.name)
+      );
+  };
+
+
+  const Controls = ({ initialItems, onItemsChange, onShuffle, presets, setPresets, selectedPresetId, setSelectedPresetId }) => {
     const [text, setText] = useState(initialItems.join('\n'));
     const isComposingRef = useRef(false);
 
     useEffect(() => {
       const itemsFromCurrentText = text.split('\n').map(item => item.trim()).filter(item => item.length > 0);
-      if (itemsFromCurrentText.length !== initialItems.length || itemsFromCurrentText.some((item, index) => item !== initialItems[index])) {
-        setText(initialItems.join('\n'));
+      if (JSON.stringify(itemsFromCurrentText) !== JSON.stringify(initialItems)) {
+          setText(initialItems.join('\n'));
       }
     }, [initialItems]);
 
     const handleTextChange = useCallback((event) => {
       const newText = event.target.value;
       setText(newText);
+      setSelectedPresetId(null);
+
       if (!isComposingRef.current) {
         const newItems = newText.split('\n').map(item => item.trim()).filter(item => item.length > 0);
         onItemsChange(newItems);
       }
-    }, [onItemsChange]);
+    }, [onItemsChange, setSelectedPresetId]);
 
-    const handleCompositionStart = useCallback(() => { isComposingRef.current = true; }, []);
+    const handleCompositionStart = useCallback(() => {
+      isComposingRef.current = true;
+    }, []);
+
     const handleCompositionEnd = useCallback((event) => {
       isComposingRef.current = false;
       const newText = event.target.value;
       const newItems = newText.split('\n').map(item => item.trim()).filter(item => item.length > 0);
       onItemsChange(newItems);
-    }, [onItemsChange]);
+      setSelectedPresetId(null);
+    }, [onItemsChange, setSelectedPresetId]);
 
-    const handlePreset = useCallback((preset) => {
-      const newItems = PRESET_ITEMS[preset];
-      setText(newItems.join('\n'));
-      onItemsChange(newItems);
-    }, [onItemsChange]);
+    const handleAddPreset = () => {
+      if (initialItems.length === 0) return;
+      const newPreset = {
+        id: Date.now().toString(),
+        name: `새 목록 ${presets.length + 1}`,
+        items: initialItems,
+      };
+      setPresets(prev => [...prev, newPreset]);
+      setSelectedPresetId(newPreset.id);
+    };
+
+    const handleDeletePreset = () => {
+      if (!selectedPresetId) return;
+      setPresets(prev => prev.filter(p => p.id !== selectedPresetId));
+      setSelectedPresetId(null);
+    };
+
 
     return createElement("div", { className: "bg-slate-800 p-6 rounded-lg shadow-2xl h-full flex flex-col overflow-y-auto" },
       createElement("h2", { className: "text-2xl font-bold mb-4 text-cyan-400" }, "돌림판 설정"),
       createElement("div", { className: "mb-4" },
         createElement("h3", { className: "font-semibold mb-2 text-gray-300" }, "미리 설정된 목록"),
-        createElement("div", { className: "flex flex-wrap gap-2" },
-          createElement("button", { onClick: () => handlePreset('participants'), className: "bg-violet-500 hover:bg-violet-600 text-sm text-white font-semibold py-1 px-3 rounded-full transition-colors" }, "참가자"),
-          createElement("button", { onClick: () => handlePreset('numbers'), className: "bg-violet-500 hover:bg-violet-600 text-sm text-white font-semibold py-1 px-3 rounded-full transition-colors" }, "숫자"),
-          createElement("button", { onClick: () => handlePreset('choices'), className: "bg-violet-500 hover:bg-violet-600 text-sm text-white font-semibold py-1 px-3 rounded-full transition-colors" }, "선택"),
-          createElement("button", { onClick: () => handlePreset('찬반'), className: "bg-violet-500 hover:bg-violet-600 text-sm text-white font-semibold py-1 px-3 rounded-full transition-colors" }, "찬반")
+        createElement("div", { className: "flex items-center justify-between gap-4 mt-2" },
+            createElement("div", { className: "flex flex-wrap gap-2 flex-grow" },
+              presets.map(preset =>
+                createElement(EditablePresetButton, {
+                  key: preset.id,
+                  preset: preset,
+                  isSelected: selectedPresetId === preset.id,
+                  onSelect: () => {
+                    onItemsChange(preset.items);
+                    setSelectedPresetId(preset.id);
+                  },
+                  onNameChange: (newName) => {
+                    setPresets(currentPresets =>
+                      currentPresets.map(p =>
+                        p.id === preset.id ? { ...p, name: newName } : p
+                      )
+                    );
+                  }
+                })
+              )
+            ),
+            createElement("div", { className: "flex items-center gap-2 flex-shrink-0" },
+                createElement("button", {
+                    onClick: handleAddPreset,
+                    disabled: initialItems.length === 0,
+                    className: "flex items-center justify-center w-8 h-8 rounded-full text-cyan-400 hover:bg-slate-700 hover:text-cyan-300 transition-colors disabled:text-gray-500 disabled:cursor-not-allowed",
+                    "aria-label": "현재 항목으로 목록 추가",
+                    title: "현재 항목으로 목록 추가"
+                },
+                    createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-5 w-5", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2.5 },
+                        createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M12 4v16m8-8H4" })
+                    )
+                ),
+                createElement("button", {
+                    onClick: handleDeletePreset,
+                    disabled: !selectedPresetId,
+                    className: "flex items-center justify-center w-8 h-8 rounded-full text-red-500 hover:bg-slate-700 hover:text-red-400 transition-colors disabled:text-gray-500 disabled:cursor-not-allowed",
+                    "aria-label": "선택 목록 삭제",
+                    title: "선택 목록 삭제"
+                },
+                    createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-5 w-5", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2.5 },
+                        createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" })
+                    )
+                )
+            )
         )
       ),
       createElement("div", { className: "flex-grow flex flex-col" },
         createElement("label", { htmlFor: "items", className: "block font-semibold mb-2 text-gray-300" }, "항목 (한 줄에 하나씩)"),
         createElement("textarea", {
-          id: "items", value: text, onChange: handleTextChange, onCompositionStart: handleCompositionStart, onCompositionEnd: handleCompositionEnd,
+          id: "items",
+          value: text,
+          onChange: handleTextChange,
+          onCompositionStart: handleCompositionStart,
+          onCompositionEnd: handleCompositionEnd,
           className: "w-full flex-grow bg-slate-700 text-gray-200 p-3 rounded-md border-2 border-slate-600 focus:border-cyan-500 focus:outline-none focus:ring-0 transition-colors",
           placeholder: "항목 1\n항목 2\n항목 3",
           rows: 5
@@ -226,7 +360,13 @@
       createElement("div", { className: "mt-4 pt-4 flex flex-col gap-3" },
         createElement("div", { className: "flex gap-3" },
           createElement("button", { onClick: onShuffle, className: "w-full bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-4 rounded-md shadow-md transform transition-all duration-300 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-teal-300" }, "순서 섞기"),
-          createElement("button", { onClick: () => { setText(''); onItemsChange([]); }, className: "w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md shadow-md transform transition-all duration-300 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-red-300" }, "전체 삭제")
+          createElement("button", {
+            onClick: () => {
+              onItemsChange([]);
+              setSelectedPresetId(null);
+            },
+            className: "w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md shadow-md transform transition-all duration-300 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-red-300"
+          }, "전체 삭제")
         )
       )
     );
@@ -660,6 +800,20 @@
     const [title, setTitle] = useState(() => localStorage.getItem('spinningWheelTitle') || '돌려돌려~ 돌림판!');
     const [subtitle, setSubtitle] = useState(() => localStorage.getItem('spinningWheelSubtitle') || '햇반 뽑기 시스템');
 
+    const [presets, setPresets] = useState(() => {
+      try {
+        const savedPresets = localStorage.getItem('spinningWheelPresets');
+        if (savedPresets) {
+          const parsed = JSON.parse(savedPresets);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        }
+      } catch (e) { console.error("미리 설정된 목록을 불러오는 데 실패했습니다:", e); }
+      return DEFAULT_PRESETS;
+    });
+    const [selectedPresetId, setSelectedPresetId] = useState(null);
+
     const [items, setItems] = useState(() => {
       try {
         const savedItems = localStorage.getItem('spinningWheelItems');
@@ -672,7 +826,7 @@
       } catch (error) {
         console.error("저장된 아이템을 불러오는 데 실패했습니다:", error);
       }
-      return PRESET_ITEMS.participants;
+      return DEFAULT_PRESETS[0].items;
     });
 
     const [winner, setWinner] = useState(null);
@@ -704,6 +858,14 @@
       }
     }, [items]);
 
+    useEffect(() => {
+      try {
+        localStorage.setItem('spinningWheelPresets', JSON.stringify(presets));
+      } catch (error) {
+        console.error("프리셋을 저장하는 데 실패했습니다:", error);
+      }
+    }, [presets]);
+
     const wheelItems = useMemo(() => {
       if (items.length === 0) return [];
       if (items.length > 0 && items.length < 16) {
@@ -720,7 +882,7 @@
 
     const handleDeleteWinner = useCallback((winnerToDelete) => {
         setItems(prevItems => prevItems.filter(item => item !== winnerToDelete));
-        setWinner(null); // 모달도 닫습니다.
+        setWinner(null);
     }, []);
 
     const toggleFullscreen = useCallback(() => {
@@ -778,7 +940,15 @@
             createElement(Wheel, { items: wheelItems, onSpinEnd: handleSpinEnd })
           ),
           createElement("div", { className: "w-full lg:w-1/3 flex flex-col min-h-0 flex-grow" },
-            createElement(Controls, { initialItems: items, onItemsChange: handleItemsChange, onShuffle: handleShuffle })
+            createElement(Controls, {
+              initialItems: items,
+              onItemsChange: handleItemsChange,
+              onShuffle: handleShuffle,
+              presets: presets,
+              setPresets: setPresets,
+              selectedPresetId: selectedPresetId,
+              setSelectedPresetId: setSelectedPresetId,
+            })
           )
         ),
         createElement(ResultModal, { winner: winner, onClose: handleCloseModal, onDeleteWinner: handleDeleteWinner }),

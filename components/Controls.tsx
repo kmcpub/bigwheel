@@ -1,38 +1,119 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { PRESET_ITEMS } from '../constants';
+import { Preset } from '../constants';
 
 interface ControlsProps {
   initialItems: string[];
   onItemsChange: (items: string[]) => void;
   onShuffle: () => void;
+  presets: Preset[];
+  setPresets: React.Dispatch<React.SetStateAction<Preset[]>>;
+  selectedPresetId: string | null;
+  setSelectedPresetId: (id: string | null) => void;
 }
 
-const Controls: React.FC<ControlsProps> = ({ initialItems, onItemsChange, onShuffle }) => {
+interface EditablePresetButtonProps {
+    preset: Preset;
+    isSelected: boolean;
+    onSelect: () => void;
+    onNameChange: (newName: string) => void;
+}
+
+const EditablePresetButton: React.FC<EditablePresetButtonProps> = ({ preset, isSelected, onSelect, onNameChange }) => {
+    const [isEditing, setIsEditing] = useState(false);
+    const [value, setValue] = useState(preset.name);
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        setValue(preset.name);
+    }, [preset.name]);
+
+    useEffect(() => {
+        if (isEditing) {
+            inputRef.current?.focus();
+            inputRef.current?.select();
+        }
+    }, [isEditing]);
+
+    const handleSave = () => {
+        const trimmedValue = value.trim();
+        if (trimmedValue && trimmedValue !== preset.name) {
+            onNameChange(trimmedValue);
+        } else {
+            setValue(preset.name); // Revert on empty or no change
+        }
+        setIsEditing(false);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') handleSave();
+        if (e.key === 'Escape') {
+            setValue(preset.name);
+            setIsEditing(false);
+        }
+    };
+
+    const handleClick = () => {
+        if (isSelected && !isEditing) {
+            setIsEditing(true);
+        } else if (!isEditing) {
+            onSelect();
+        }
+    };
+
+    const baseClasses = "text-sm text-white font-semibold py-1 px-3 rounded-full transition-colors flex-shrink-0";
+    const selectedClasses = isSelected ? "ring-2 ring-cyan-400 bg-violet-700" : "bg-violet-500 hover:bg-violet-600";
+    
+    if (isEditing) {
+        return (
+            <div className={`${baseClasses} ${selectedClasses} inline-flex items-center justify-center`}>
+                 <input
+                    ref={inputRef}
+                    type="text"
+                    value={value}
+                    onChange={(e) => setValue(e.target.value)}
+                    onBlur={handleSave}
+                    onKeyDown={handleKeyDown}
+                    className="bg-transparent outline-none text-center p-0 m-0 w-24"
+                    onClick={(e) => e.stopPropagation()}
+                />
+            </div>
+        )
+    }
+
+    return (
+        <button
+            onClick={handleClick}
+            className={`${baseClasses} ${selectedClasses}`}
+            title={isSelected ? "이름을 수정하려면 다시 클릭하세요" : preset.name}
+        >
+            {preset.name}
+        </button>
+    );
+};
+
+
+const Controls: React.FC<ControlsProps> = ({ initialItems, onItemsChange, onShuffle, presets, setPresets, selectedPresetId, setSelectedPresetId }) => {
   const [text, setText] = useState(initialItems.join('\n'));
-  const isComposingRef = useRef(false); // IME 조합 중인지 여부를 추적
+  const isComposingRef = useRef(false);
 
   useEffect(() => {
-    // 이 효과는 부모의 상태가 외부 소스(예: 셔플, 프리셋)에 의해 변경될 때 textarea를 동기화합니다.
-    // 사용자의 입력을 덮어쓰는 것을 방지하기 위해, 현재 텍스트에서 파생된 항목과 들어오는 항목을 비교합니다.
     const itemsFromCurrentText = text.split('\n').map(item => item.trim()).filter(item => item.length > 0);
     
-    // 간단한 배열 비교. 동일하지 않은 경우에만 외부 변경이 발생한 것으로 간주합니다.
-    if (itemsFromCurrentText.length !== initialItems.length || 
-        itemsFromCurrentText.some((item, index) => item !== initialItems[index])) {
-      setText(initialItems.join('\n'));
+    if (JSON.stringify(itemsFromCurrentText) !== JSON.stringify(initialItems)) {
+        setText(initialItems.join('\n'));
     }
   }, [initialItems]);
 
   const handleTextChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newText = event.target.value;
-    setText(newText); // 입력 필드의 반응성을 위해 항상 내부 상태를 업데이트합니다.
+    setText(newText);
+    setSelectedPresetId(null);
 
-    // IME 입력 중이 아닐 때만 부모 컴포넌트로 변경 사항을 실시간 전파합니다.
     if (!isComposingRef.current) {
       const newItems = newText.split('\n').map(item => item.trim()).filter(item => item.length > 0);
       onItemsChange(newItems);
     }
-  }, [onItemsChange]);
+  }, [onItemsChange, setSelectedPresetId]);
 
   const handleCompositionStart = useCallback(() => {
     isComposingRef.current = true;
@@ -40,18 +121,29 @@ const Controls: React.FC<ControlsProps> = ({ initialItems, onItemsChange, onShuf
 
   const handleCompositionEnd = useCallback((event: React.CompositionEvent<HTMLTextAreaElement>) => {
     isComposingRef.current = false;
-    // IME 입력이 최종 완료되었으므로, 확정된 텍스트로 부모 컴포넌트 상태를 업데이트합니다.
     const newText = (event.target as HTMLTextAreaElement).value;
     const newItems = newText.split('\n').map(item => item.trim()).filter(item => item.length > 0);
     onItemsChange(newItems);
-  }, [onItemsChange]);
+    setSelectedPresetId(null);
+  }, [onItemsChange, setSelectedPresetId]);
 
+  const handleAddPreset = () => {
+    if (initialItems.length === 0) return;
+    const newPreset: Preset = {
+      id: Date.now().toString(),
+      name: `새 목록 ${presets.length + 1}`,
+      items: initialItems,
+    };
+    setPresets(prev => [...prev, newPreset]);
+    setSelectedPresetId(newPreset.id);
+  };
 
-  const handlePreset = useCallback((preset: keyof typeof PRESET_ITEMS) => {
-    const newItems = PRESET_ITEMS[preset];
-    setText(newItems.join('\n'));
-    onItemsChange(newItems);
-  }, [onItemsChange]);
+  const handleDeletePreset = () => {
+    if (!selectedPresetId) return;
+    setPresets(prev => prev.filter(p => p.id !== selectedPresetId));
+    setSelectedPresetId(null);
+  };
+
 
   return (
     <div className="bg-slate-800 p-6 rounded-lg shadow-2xl h-full flex flex-col overflow-y-auto">
@@ -59,11 +151,51 @@ const Controls: React.FC<ControlsProps> = ({ initialItems, onItemsChange, onShuf
       
       <div className="mb-4">
         <h3 className="font-semibold mb-2 text-gray-300">미리 설정된 목록</h3>
-        <div className="flex flex-wrap gap-2">
-            <button onClick={() => handlePreset('participants')} className="bg-violet-500 hover:bg-violet-600 text-sm text-white font-semibold py-1 px-3 rounded-full transition-colors">참가자</button>
-            <button onClick={() => handlePreset('numbers')} className="bg-violet-500 hover:bg-violet-600 text-sm text-white font-semibold py-1 px-3 rounded-full transition-colors">숫자</button>
-            <button onClick={() => handlePreset('choices')} className="bg-violet-500 hover:bg-violet-600 text-sm text-white font-semibold py-1 px-3 rounded-full transition-colors">선택</button>
-            <button onClick={() => handlePreset('찬반')} className="bg-violet-500 hover:bg-violet-600 text-sm text-white font-semibold py-1 px-3 rounded-full transition-colors">찬반</button>
+        <div className="flex items-center justify-between gap-4 mt-2">
+            <div className="flex flex-wrap gap-2 flex-grow">
+              {presets.map(preset => (
+                <EditablePresetButton
+                  key={preset.id}
+                  preset={preset}
+                  isSelected={selectedPresetId === preset.id}
+                  onSelect={() => {
+                    onItemsChange(preset.items);
+                    setSelectedPresetId(preset.id);
+                  }}
+                  onNameChange={(newName) => {
+                    setPresets(currentPresets =>
+                      currentPresets.map(p =>
+                        p.id === preset.id ? { ...p, name: newName } : p
+                      )
+                    );
+                  }}
+                />
+              ))}
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+                 <button
+                    onClick={handleAddPreset}
+                    disabled={initialItems.length === 0}
+                    className="flex items-center justify-center w-8 h-8 rounded-full text-cyan-400 hover:bg-slate-700 hover:text-cyan-300 transition-colors disabled:text-gray-500 disabled:cursor-not-allowed"
+                    aria-label="현재 항목으로 목록 추가"
+                    title="현재 항목으로 목록 추가"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                </button>
+                <button
+                    onClick={handleDeletePreset}
+                    disabled={!selectedPresetId}
+                    className="flex items-center justify-center w-8 h-8 rounded-full text-red-500 hover:bg-slate-700 hover:text-red-400 transition-colors disabled:text-gray-500 disabled:cursor-not-allowed"
+                    aria-label="선택 목록 삭제"
+                    title="선택 목록 삭제"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                </button>
+            </div>
         </div>
       </div>
 
@@ -96,8 +228,8 @@ const Controls: React.FC<ControlsProps> = ({ initialItems, onItemsChange, onShuf
             </button>
             <button
               onClick={() => {
-                setText('');
                 onItemsChange([]);
+                setSelectedPresetId(null);
               }}
               className="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md shadow-md transform transition-all duration-300 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-red-300"
             >

@@ -3,7 +3,7 @@ import Wheel from './components/Wheel';
 import Controls from './components/Controls';
 import ResultModal from './components/ResultModal';
 import ScreenPickerModal from './components/ScreenPickerModal';
-import { PRESET_ITEMS } from './constants';
+import { DEFAULT_PRESETS, Preset } from './constants';
 
 // --- 인라인 편집 가능한 텍스트 컴포넌트 ---
 interface EditableTextProps {
@@ -86,6 +86,20 @@ const App: React.FC = () => {
   const [title, setTitle] = useState<string>(() => localStorage.getItem('spinningWheelTitle') || '돌려돌려~ 돌림판!');
   const [subtitle, setSubtitle] = useState<string>(() => localStorage.getItem('spinningWheelSubtitle') || '햇반 뽑기 시스템');
   
+  const [presets, setPresets] = useState<Preset[]>(() => {
+    try {
+      const savedPresets = localStorage.getItem('spinningWheelPresets');
+      if (savedPresets) {
+        const parsed = JSON.parse(savedPresets);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) { console.error("미리 설정된 목록을 불러오는 데 실패했습니다:", e); }
+    return DEFAULT_PRESETS;
+  });
+  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
+
   // 로컬 스토리지에서 아이템을 불러오거나 기본값으로 초기화합니다.
   const [items, setItems] = useState<string[]>(() => {
     try {
@@ -101,7 +115,7 @@ const App: React.FC = () => {
       console.error("저장된 아이템을 불러오는 데 실패했습니다:", error);
     }
     // 저장된 아이템이 없으면 기본 참가자 목록을 사용합니다.
-    return PRESET_ITEMS.participants;
+    return DEFAULT_PRESETS[0].items;
   });
   
   const [winner, setWinner] = useState<string | null>(null);
@@ -137,6 +151,16 @@ const App: React.FC = () => {
       console.error("아이템을 저장하는 데 실패했습니다:", error);
     }
   }, [items]);
+  
+  // 프리셋 목록이 변경될 때마다 로컬 스토리지에 저장합니다.
+  useEffect(() => {
+    try {
+      localStorage.setItem('spinningWheelPresets', JSON.stringify(presets));
+    } catch (error) {
+      console.error("프리셋을 저장하는 데 실패했습니다:", error);
+    }
+  }, [presets]);
+
 
   const wheelItems = useMemo(() => {
     if (items.length === 0) {
@@ -230,7 +254,15 @@ const App: React.FC = () => {
             <Wheel items={wheelItems} onSpinEnd={handleSpinEnd} />
           </div>
           <div className="w-full lg:w-1/3 flex flex-col min-h-0 flex-grow">
-            <Controls initialItems={items} onItemsChange={handleItemsChange} onShuffle={handleShuffle} />
+            <Controls
+              initialItems={items}
+              onItemsChange={handleItemsChange}
+              onShuffle={handleShuffle}
+              presets={presets}
+              setPresets={setPresets}
+              selectedPresetId={selectedPresetId}
+              setSelectedPresetId={setSelectedPresetId}
+            />
           </div>
         </main>
 
