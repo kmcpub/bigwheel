@@ -63,6 +63,7 @@ const Controls: React.FC<ControlsProps> = ({ initialItems, onItemsChange, onShuf
             <button onClick={() => handlePreset('participants')} className="bg-violet-500 hover:bg-violet-600 text-sm text-white font-semibold py-1 px-3 rounded-full transition-colors">참가자</button>
             <button onClick={() => handlePreset('numbers')} className="bg-violet-500 hover:bg-violet-600 text-sm text-white font-semibold py-1 px-3 rounded-full transition-colors">숫자</button>
             <button onClick={() => handlePreset('choices')} className="bg-violet-500 hover:bg-violet-600 text-sm text-white font-semibold py-1 px-3 rounded-full transition-colors">선택</button>
+            <button onClick={() => handlePreset('찬반')} className="bg-violet-500 hover:bg-violet-600 text-sm text-white font-semibold py-1 px-3 rounded-full transition-colors">찬반</button>
         </div>
       </div>
 

@@ -77,6 +77,11 @@ const App: React.FC = () => {
     setWinner(null);
   }, []);
 
+  const handleDeleteWinner = useCallback((winnerToDelete: string) => {
+    setItems(prevItems => prevItems.filter(item => item !== winnerToDelete));
+    setWinner(null); // 모달도 닫습니다.
+  }, []);
+
   const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch(err => {
@@ -130,7 +135,7 @@ const App: React.FC = () => {
           </div>
         </main>
 
-        <ResultModal winner={winner} onClose={handleCloseModal} />
+        <ResultModal winner={winner} onClose={handleCloseModal} onDeleteWinner={handleDeleteWinner} />
         <ScreenPickerModal 
             show={showScreenPicker} 
             screens={screens} 

@@ -14,6 +14,7 @@
     participants: ['철수', '영희', '민준', '서연', '지훈', '하은', '도윤', '유진'],
     numbers: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'],
     choices: ['예', '아니오', '아마도', '나중에 다시 물어보기'],
+    '찬반': ['찬성', '반대'],
   };
 
   // --- START OF components/ResultModal.tsx ---
@@ -25,7 +26,7 @@
     })
   );
 
-  const ResultModal = ({ winner, onClose }) => {
+  const ResultModal = ({ winner, onClose, onDeleteWinner }) => {
     const [confetti, setConfetti] = useState([]);
     const [isVisible, setIsVisible] = useState(false);
     const nextId = useRef(0);
@@ -68,6 +69,12 @@
         setConfetti([]);
       }
     };
+    
+    const handleConfirmDelete = () => {
+      if (winner) {
+        onDeleteWinner(winner);
+      }
+    };
 
     if (!winner && !isVisible) {
       return null;
@@ -89,7 +96,7 @@
         )
       ),
       createElement("div", {
-          className: `transform transition-all duration-700 ease-out ${isVisible ? 'scale-100 opacity-100' : 'scale-125 opacity-0'}`,
+          className: `flex flex-col items-center justify-center transform transition-all duration-700 ease-out ${isVisible ? 'scale-100 opacity-100' : 'scale-125 opacity-0'}`,
           onClick: (e) => e.stopPropagation()
         },
         createElement("p", {
@@ -99,7 +106,17 @@
             lineHeight: '1',
             textShadow: '0 5px 30px rgba(0, 0, 0, 0.5), 0 0 25px rgba(250, 204, 21, 0.8)'
           }
-        }, winner)
+        }, winner),
+        createElement("div", { className: "mt-12 flex flex-col sm:flex-row items-center justify-center gap-4" },
+            createElement("button", {
+                onClick: handleConfirmDelete,
+                className: "w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg transform transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-4 focus:ring-red-400"
+            }, "당첨된 항목 지우기"),
+            createElement("button", {
+                onClick: onClose,
+                className: "w-full sm:w-auto bg-slate-600 hover:bg-slate-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg transform transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-4 focus:ring-slate-400"
+            }, "닫기")
+        )
       )
     );
   };
@@ -192,7 +209,8 @@
         createElement("div", { className: "flex flex-wrap gap-2" },
           createElement("button", { onClick: () => handlePreset('participants'), className: "bg-violet-500 hover:bg-violet-600 text-sm text-white font-semibold py-1 px-3 rounded-full transition-colors" }, "참가자"),
           createElement("button", { onClick: () => handlePreset('numbers'), className: "bg-violet-500 hover:bg-violet-600 text-sm text-white font-semibold py-1 px-3 rounded-full transition-colors" }, "숫자"),
-          createElement("button", { onClick: () => handlePreset('choices'), className: "bg-violet-500 hover:bg-violet-600 text-sm text-white font-semibold py-1 px-3 rounded-full transition-colors" }, "선택")
+          createElement("button", { onClick: () => handlePreset('choices'), className: "bg-violet-500 hover:bg-violet-600 text-sm text-white font-semibold py-1 px-3 rounded-full transition-colors" }, "선택"),
+          createElement("button", { onClick: () => handlePreset('찬반'), className: "bg-violet-500 hover:bg-violet-600 text-sm text-white font-semibold py-1 px-3 rounded-full transition-colors" }, "찬반")
         )
       ),
       createElement("div", { className: "flex-grow flex flex-col" },
@@ -529,6 +547,11 @@
     const handleSpinEnd = useCallback((selectedItem) => { setWinner(selectedItem); }, []);
     const handleCloseModal = useCallback(() => { setWinner(null); }, []);
 
+    const handleDeleteWinner = useCallback((winnerToDelete) => {
+        setItems(prevItems => prevItems.filter(item => item !== winnerToDelete));
+        setWinner(null); // 모달도 닫습니다.
+    }, []);
+
     const toggleFullscreen = useCallback(() => {
       if (!document.fullscreenElement) {
         document.documentElement.requestFullscreen().catch(err => {
@@ -575,7 +598,7 @@
             createElement(Controls, { initialItems: items, onItemsChange: handleItemsChange, onShuffle: handleShuffle })
           )
         ),
-        createElement(ResultModal, { winner: winner, onClose: handleCloseModal }),
+        createElement(ResultModal, { winner: winner, onClose: handleCloseModal, onDeleteWinner: handleDeleteWinner }),
         createElement(ScreenPickerModal, { show: showScreenPicker, screens: screens, onSelect: enterFullscreenOnScreen, onClose: () => setShowScreenPicker(false) })
       ),
       createElement("div", { className: "fixed bottom-4 right-4 z-30 flex flex-col items-end gap-3" },

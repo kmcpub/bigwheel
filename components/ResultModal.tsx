@@ -23,9 +23,10 @@ const ConfettiPiece: React.FC<ConfettiPieceProps> = ({ id, style, onAnimationEnd
 interface ResultModalProps {
   winner: string | null;
   onClose: () => void;
+  onDeleteWinner: (winner: string) => void;
 }
 
-const ResultModal: React.FC<ResultModalProps> = ({ winner, onClose }) => {
+const ResultModal: React.FC<ResultModalProps> = ({ winner, onClose, onDeleteWinner }) => {
   const [confetti, setConfetti] = useState<ConfettiState[]>([]);
   const [isVisible, setIsVisible] = useState(false);
   const nextId = useRef(0);
@@ -74,6 +75,12 @@ const ResultModal: React.FC<ResultModalProps> = ({ winner, onClose }) => {
         setConfetti([]); // 모달 닫힘 애니메이션이 끝나면 색종이를 모두 제거합니다.
     }
   }
+  
+  const handleConfirmDelete = () => {
+    if (winner) {
+      onDeleteWinner(winner);
+    }
+  };
 
   if (!winner && !isVisible) {
     return null;
@@ -96,7 +103,7 @@ const ResultModal: React.FC<ResultModalProps> = ({ winner, onClose }) => {
         )}
       </div>
       <div 
-        className={`transform transition-all duration-700 ease-out ${isVisible ? 'scale-100 opacity-100' : 'scale-125 opacity-0'}`}
+        className={`flex flex-col items-center justify-center transform transition-all duration-700 ease-out ${isVisible ? 'scale-100 opacity-100' : 'scale-125 opacity-0'}`}
         onClick={(e) => e.stopPropagation()}
       >
         <p 
@@ -109,6 +116,21 @@ const ResultModal: React.FC<ResultModalProps> = ({ winner, onClose }) => {
         >
           {winner}
         </p>
+
+        <div className="mt-12 flex flex-col sm:flex-row items-center justify-center gap-4">
+            <button
+                onClick={handleConfirmDelete}
+                className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg transform transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-4 focus:ring-red-400"
+            >
+                당첨된 항목 지우기
+            </button>
+            <button
+                onClick={onClose}
+                className="w-full sm:w-auto bg-slate-600 hover:bg-slate-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg transform transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-4 focus:ring-slate-400"
+            >
+                닫기
+            </button>
+        </div>
       </div>
     </div>
   );
