@@ -240,12 +240,13 @@
   };
 
 
-  const Controls = ({ initialItems, onItemsChange, onShuffle, presets, setPresets, selectedPresetId, setSelectedPresetId }) => {
+  const Controls = ({ initialItems, onItemsChange, onShuffle, presets, setPresets, selectedPresetId, setSelectedPresetId, expandedHeight, collapsedVisibleHeight }) => {
     const [text, setText] = useState(initialItems.join('\n'));
     const isComposingRef = useRef(false);
     const [isExpanded, setIsExpanded] = useState(false);
     const dragStartY = useRef(0);
     const isDragging = useRef(false);
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
 
     useEffect(() => {
       const itemsFromCurrentText = text.split('\n').map(item => item.trim()).filter(item => item.length > 0);
@@ -256,7 +257,9 @@
     
     useEffect(() => {
       const handleResize = () => {
-        if (window.innerWidth >= 1024) {
+        const mobile = window.innerWidth < 1024;
+        setIsMobile(mobile);
+        if (!mobile) {
           setIsExpanded(false);
         }
       };
@@ -414,18 +417,26 @@
       )
     );
 
+    const containerStyle = {};
+    if (isMobile) {
+        containerStyle.transform = isExpanded
+            ? 'translateY(0)'
+            : `translateY(calc(100% - ${collapsedVisibleHeight}px))`;
+    }
+
     return createElement(Fragment, null,
-      isExpanded && createElement("div", { className: "fixed inset-0 bg-black/60 z-20 lg:hidden", onClick: () => setIsExpanded(false) }),
+      isExpanded && isMobile && createElement("div", { className: "fixed inset-0 bg-black/60 z-20 lg:hidden", onClick: () => setIsExpanded(false) }),
       createElement("div", {
         className: `
-        lg:h-full lg:relative lg:transform-none
-        fixed inset-x-0 bottom-0 z-30
-        transition-transform duration-300 ease-out
-        ${isExpanded ? 'translate-y-0' : 'translate-y-[calc(100%-128px)]'}
-      `},
+          lg:h-full lg:relative lg:transform-none
+          fixed inset-x-0 bottom-0 z-30
+          transition-transform duration-300 ease-out
+        `,
+        style: containerStyle
+      },
         createElement("div", {
           className: "bg-slate-800 lg:p-6 rounded-t-2xl lg:rounded-lg shadow-2xl h-full flex flex-col",
-          style: isExpanded ? { height: '85dvh' } : {}
+          style: isMobile && isExpanded ? { height: expandedHeight } : {}
         },
           createElement("div", {
             className: "w-full py-4 flex-shrink-0 flex justify-center items-center cursor-grab lg:hidden",
@@ -434,7 +445,7 @@
             onPointerMove: handlePointerMove,
             style: { touchAction: 'none' },
             "aria-label": isExpanded ? "설정 패널 축소" : "설정 패널 확장"
-          }, 
+          },
             createElement("div", { className: "w-10 h-1.5 bg-slate-600 rounded-full" })
           ),
           controlsContent
@@ -904,6 +915,32 @@
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [screens, setScreens] = useState([]);
     const [showScreenPicker, setShowScreenPicker] = useState(false);
+    const wheelContainerRef = useRef(null);
+    const [collapsedVisibleHeight, setCollapsedVisibleHeight] = useState(128);
+    
+    useEffect(() => {
+        const calculateHeight = () => {
+            if (wheelContainerRef.current && window.innerWidth < 1024) {
+                const rect = wheelContainerRef.current.getBoundingClientRect();
+                const margin = 16; // 1rem gap from wheel
+                const height = window.innerHeight - rect.bottom - margin;
+                
+                // Set a minimum height for the visible part of the collapsed controls.
+                setCollapsedVisibleHeight(Math.max(128, height));
+            } else {
+                setCollapsedVisibleHeight(128); // Reset to default for desktop
+            }
+        };
+
+        window.addEventListener('resize', calculateHeight);
+        // Initial calculation after a short delay to allow layout to settle.
+        const timeoutId = setTimeout(calculateHeight, 100);
+
+        return () => {
+            window.removeEventListener('resize', calculateHeight);
+            clearTimeout(timeoutId);
+        };
+    }, []);
 
     useEffect(() => {
       const handleFullscreenChange = () => {
@@ -1007,7 +1044,7 @@
           })
         ),
         createElement("main", { className: "w-full max-w-7xl flex-grow flex flex-col lg:flex-row gap-8 items-stretch min-h-0" },
-          createElement("div", { className: "w-full lg:w-2/3 flex items-center justify-center" },
+          createElement("div", { ref: wheelContainerRef, className: "w-full lg:w-2/3 flex items-center justify-center" },
             createElement(Wheel, { items: wheelItems, onSpinEnd: handleSpinEnd })
           ),
           createElement("div", { className: "w-full lg:w-1/3 flex flex-col min-h-0 flex-grow" },
@@ -1019,6 +1056,8 @@
               setPresets: setPresets,
               selectedPresetId: selectedPresetId,
               setSelectedPresetId: setSelectedPresetId,
+              expandedHeight: "85dvh",
+              collapsedVisibleHeight: collapsedVisibleHeight,
             })
           )
         ),

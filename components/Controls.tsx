@@ -9,6 +9,8 @@ interface ControlsProps {
   setPresets: React.Dispatch<React.SetStateAction<Preset[]>>;
   selectedPresetId: string | null;
   setSelectedPresetId: (id: string | null) => void;
+  expandedHeight: string;
+  collapsedVisibleHeight: number;
 }
 
 interface EditablePresetButtonProps {
@@ -92,12 +94,14 @@ const EditablePresetButton: React.FC<EditablePresetButtonProps> = ({ preset, isS
 };
 
 
-const Controls: React.FC<ControlsProps> = ({ initialItems, onItemsChange, onShuffle, presets, setPresets, selectedPresetId, setSelectedPresetId }) => {
+const Controls: React.FC<ControlsProps> = ({ initialItems, onItemsChange, onShuffle, presets, setPresets, selectedPresetId, setSelectedPresetId, expandedHeight, collapsedVisibleHeight }) => {
   const [text, setText] = useState(initialItems.join('\n'));
   const isComposingRef = useRef(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const dragStartY = useRef(0);
   const isDragging = useRef(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+
 
   useEffect(() => {
     const itemsFromCurrentText = text.split('\n').map(item => item.trim()).filter(item => item.length > 0);
@@ -108,7 +112,9 @@ const Controls: React.FC<ControlsProps> = ({ initialItems, onItemsChange, onShuf
   
   useEffect(() => {
     const handleResize = () => {
-      if (window.innerWidth >= 1024) {
+      const mobile = window.innerWidth < 1024;
+      setIsMobile(mobile);
+      if (!mobile) {
         setIsExpanded(false); // Close sheet on resize to desktop
       }
     };
@@ -278,20 +284,29 @@ const Controls: React.FC<ControlsProps> = ({ initialItems, onItemsChange, onShuf
     </div>
   );
 
+  const containerStyle: React.CSSProperties = {};
+  if (isMobile) {
+      containerStyle.transform = isExpanded
+          ? 'translateY(0)'
+          : `translateY(calc(100% - ${collapsedVisibleHeight}px))`;
+  }
+
   return (
     <>
       {/* Backdrop for expanded sheet on mobile */}
-      {isExpanded && <div className="fixed inset-0 bg-black/60 z-20 lg:hidden" onClick={() => setIsExpanded(false)} />}
+      {isExpanded && isMobile && <div className="fixed inset-0 bg-black/60 z-20 lg:hidden" onClick={() => setIsExpanded(false)} />}
       
-      <div className={`
-        lg:h-full lg:relative lg:transform-none
-        fixed inset-x-0 bottom-0 z-30
-        transition-transform duration-300 ease-out
-        ${isExpanded ? 'translate-y-0' : 'translate-y-[calc(100%-128px)]'}
-      `}>
+      <div 
+        className={`
+          lg:h-full lg:relative lg:transform-none
+          fixed inset-x-0 bottom-0 z-30
+          transition-transform duration-300 ease-out
+        `}
+        style={containerStyle}
+      >
         <div 
           className="bg-slate-800 lg:p-6 rounded-t-2xl lg:rounded-lg shadow-2xl h-full flex flex-col"
-          style={isExpanded ? { height: '85dvh' } : {}}
+          style={isMobile && isExpanded ? { height: expandedHeight } : {}}
         >
           {/* Mobile handle */}
           <div

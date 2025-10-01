@@ -122,7 +122,32 @@ const App: React.FC = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [screens, setScreens] = useState<any[]>([]);
   const [showScreenPicker, setShowScreenPicker] = useState(false);
+  const wheelContainerRef = useRef<HTMLDivElement>(null);
+  const [collapsedVisibleHeight, setCollapsedVisibleHeight] = useState(128);
 
+  useEffect(() => {
+    const calculateHeight = () => {
+        if (wheelContainerRef.current && window.innerWidth < 1024) {
+            const rect = wheelContainerRef.current.getBoundingClientRect();
+            const margin = 16; // 1rem gap from wheel
+            const height = window.innerHeight - rect.bottom - margin;
+            
+            // Set a minimum height for the visible part of the collapsed controls.
+            setCollapsedVisibleHeight(Math.max(128, height));
+        } else {
+            setCollapsedVisibleHeight(128); // Reset to default for desktop
+        }
+    };
+
+    window.addEventListener('resize', calculateHeight);
+    // Initial calculation after a short delay to allow layout to settle.
+    const timeoutId = setTimeout(calculateHeight, 100);
+
+    return () => {
+        window.removeEventListener('resize', calculateHeight);
+        clearTimeout(timeoutId);
+    };
+  }, []);
 
   // 전체 화면 상태 변경을 감지하는 이벤트 리스너
   useEffect(() => {
@@ -250,7 +275,7 @@ const App: React.FC = () => {
         </header>
 
         <main className="w-full max-w-7xl flex-grow flex flex-col lg:flex-row gap-8 items-stretch min-h-0">
-          <div className="w-full lg:w-2/3 flex items-center justify-center">
+          <div ref={wheelContainerRef} className="w-full lg:w-2/3 flex items-center justify-center">
             <Wheel items={wheelItems} onSpinEnd={handleSpinEnd} />
           </div>
           <div className="w-full lg:w-1/3 flex flex-col min-h-0 flex-grow">
@@ -262,6 +287,8 @@ const App: React.FC = () => {
               setPresets={setPresets}
               selectedPresetId={selectedPresetId}
               setSelectedPresetId={setSelectedPresetId}
+              expandedHeight="85dvh"
+              collapsedVisibleHeight={collapsedVisibleHeight}
             />
           </div>
         </main>
