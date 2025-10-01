@@ -25,7 +25,7 @@ export interface Preset {
 
 // 사용자가 쉽게 불러올 수 있는 기본으로 제공되는 미리 설정된 아이템 목록입니다.
 export const DEFAULT_PRESETS: Preset[] = [
-  { id: 'participants', name: '참가자', items: ['철수', '영희', '민준', '서연', '지훈', '하은', '도윤', '유진'] },
+  { id: 'participants', name: '참가자', items: ['철수*3', '영희*2', '민준', '서연', '지훈', '하은', '도윤', '유진'] },
   { id: 'numbers', name: '숫자', items: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'] },
   { id: 'rps', name: '가위바위보', items: ['가위', '바위', '보'] },
   { id: 'pros-cons', name: '찬반', items: ['찬성', '반대'] },

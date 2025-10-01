@@ -370,31 +370,64 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
 
   const renderSegments = () => {
     if (numItems === 0) return null;
+
+    const groupedItems: { item: string; count: number; startIndex: number }[] = [];
+    if (items.length > 0) {
+      let currentGroup = {
+        item: items[0],
+        count: 1,
+        startIndex: 0
+      };
+      for (let i = 1; i < items.length; i++) {
+        if (items[i] === currentGroup.item) {
+          currentGroup.count++;
+        } else {
+          groupedItems.push(currentGroup);
+          currentGroup = {
+            item: items[i],
+            count: 1,
+            startIndex: i
+          };
+        }
+      }
+      groupedItems.push(currentGroup);
+    }
+
     const segmentAngle = 360 / numItems;
 
-    return items.map((item, index) => {
-      const startAngle = segmentAngle * index;
-      const endAngle = startAngle + segmentAngle;
+    return groupedItems.map((group) => {
+      const startAngle = segmentAngle * group.startIndex;
+      const groupAngle = segmentAngle * group.count;
+      const endAngle = startAngle + groupAngle;
       
       const start = getCoordinatesForPercent(startAngle / 360);
       const end = getCoordinatesForPercent(endAngle / 360);
 
-      const largeArcFlag = segmentAngle > 180 ? 1 : 0;
+      const largeArcFlag = groupAngle > 180 ? 1 : 0;
 
-      const pathData = [ `M ${center},${center}`, `L ${start[0]},${start[1]}`, `A ${radius},${radius} 0 ${largeArcFlag} 1 ${end[0]},${end[1]}`, 'Z' ].join(' ');
+      const pathData = [
+        `M ${center},${center}`,
+        `L ${start[0]},${start[1]}`,
+        `A ${radius},${radius} 0 ${largeArcFlag} 1 ${end[0]},${end[1]}`,
+        'Z'
+      ].join(' ');
       
-      const textAngle = startAngle + segmentAngle / 2;
+      const textAngle = startAngle + groupAngle / 2;
       const textRotation = textAngle > 90 && textAngle < 270 ? textAngle - 180 : textAngle;
       
-      const textX = center + (radius / 1.5) * Math.cos(textAngle * Math.PI / 180);
-      const textY = center + (radius / 1.5) * Math.sin(textAngle * Math.PI / 180);
+      const textRadiusMultiplier = Math.max(1.2, 1.8 - group.count * 0.1);
+      const textX = center + (radius / textRadiusMultiplier) * Math.cos(textAngle * Math.PI / 180);
+      const textY = center + (radius / textRadiusMultiplier) * Math.sin(textAngle * Math.PI / 180);
 
-      const truncatedItem = item.length > 15 ? item.substring(0, 14) + '…' : item;
-      const fontSize = Math.max(8, 28 - numItems * 0.5);
+      const truncatedItem = group.item.length > 15 ? group.item.substring(0, 14) + '…' : group.item;
+      
+      const baseFontSize = 28 - numItems * 0.5;
+      const weightedFontSize = baseFontSize + (group.count - 1) * 5;
+      const fontSize = Math.max(10, Math.min(50, weightedFontSize));
 
       return (
-        <g key={index}>
-          <path d={pathData} fill={colorMap.get(item) || '#374151'} stroke="#1f2937" strokeWidth="2" />
+        <g key={group.startIndex}>
+          <path d={pathData} fill={colorMap.get(group.item) || '#374151'} stroke="#1f2937" strokeWidth="2" />
           <text
             x={textX} y={textY}
             transform={`rotate(${textRotation}, ${textX}, ${textY})`}

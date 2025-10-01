@@ -11,7 +11,7 @@
     '#f472b6', '#fb7185',
   ];
   const DEFAULT_PRESETS = [
-    { id: 'participants', name: '참가자', items: ['철수', '영희', '민준', '서연', '지훈', '하은', '도윤', '유진'] },
+    { id: 'participants', name: '참가자', items: ['철수*3', '영희*2', '민준', '서연', '지훈', '하은', '도윤', '유진'] },
     { id: 'numbers', name: '숫자', items: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'] },
     { id: 'rps', name: '가위바위보', items: ['가위', '바위', '보'] },
     { id: 'pros-cons', name: '찬반', items: ['찬성', '반대'] },
@@ -852,22 +852,49 @@
 
     const renderSegments = () => {
       if (numItems === 0) return null;
+
+      const groupedItems = [];
+      if (items.length > 0) {
+        let currentGroup = { item: items[0], count: 1, startIndex: 0 };
+        for (let i = 1; i < items.length; i++) {
+          if (items[i] === currentGroup.item) {
+            currentGroup.count++;
+          } else {
+            groupedItems.push(currentGroup);
+            currentGroup = { item: items[i], count: 1, startIndex: i };
+          }
+        }
+        groupedItems.push(currentGroup);
+      }
+
       const segmentAngle = 360 / numItems;
-      return items.map((item, index) => {
-        const startAngle = segmentAngle * index;
-        const endAngle = startAngle + segmentAngle;
+
+      return groupedItems.map((group) => {
+        const startAngle = segmentAngle * group.startIndex;
+        const groupAngle = segmentAngle * group.count;
+        const endAngle = startAngle + groupAngle;
+        
         const start = getCoordinatesForPercent(startAngle / 360);
         const end = getCoordinatesForPercent(endAngle / 360);
-        const largeArcFlag = segmentAngle > 180 ? 1 : 0;
+
+        const largeArcFlag = groupAngle > 180 ? 1 : 0;
         const pathData = [`M ${center},${center}`, `L ${start[0]},${start[1]}`, `A ${radius},${radius} 0 ${largeArcFlag} 1 ${end[0]},${end[1]}`, 'Z'].join(' ');
-        const textAngle = startAngle + segmentAngle / 2;
+        
+        const textAngle = startAngle + groupAngle / 2;
         const textRotation = textAngle > 90 && textAngle < 270 ? textAngle - 180 : textAngle;
-        const textX = center + (radius / 1.5) * Math.cos(textAngle * Math.PI / 180);
-        const textY = center + (radius / 1.5) * Math.sin(textAngle * Math.PI / 180);
-        const truncatedItem = item.length > 15 ? item.substring(0, 14) + '…' : item;
-        const fontSize = Math.max(8, 28 - numItems * 0.5);
-        return createElement("g", { key: index },
-          createElement("path", { d: pathData, fill: colorMap.get(item) || '#374151', stroke: "#1f2937", strokeWidth: "2" }),
+        
+        const textRadiusMultiplier = Math.max(1.2, 1.8 - group.count * 0.1);
+        const textX = center + (radius / textRadiusMultiplier) * Math.cos(textAngle * Math.PI / 180);
+        const textY = center + (radius / textRadiusMultiplier) * Math.sin(textAngle * Math.PI / 180);
+
+        const truncatedItem = group.item.length > 15 ? group.item.substring(0, 14) + '…' : group.item;
+        
+        const baseFontSize = 28 - numItems * 0.5;
+        const weightedFontSize = baseFontSize + (group.count - 1) * 5;
+        const fontSize = Math.max(10, Math.min(50, weightedFontSize));
+
+        return createElement("g", { key: group.startIndex },
+          createElement("path", { d: pathData, fill: colorMap.get(group.item) || '#374151', stroke: "#1f2937", strokeWidth: "2" }),
           createElement("text", {
             x: textX, y: textY,
             transform: `rotate(${textRotation}, ${textX}, ${textY})`,
@@ -983,7 +1010,7 @@
   // --- START OF App.tsx ---
   const App = () => {
     const [title, setTitle] = useState(() => localStorage.getItem('spinningWheelTitle') || '돌려돌려~ 돌림판!');
-    const [subtitle, setSubtitle] = useState(() => localStorage.getItem('spinningWheelSubtitle') || '햇반 뽑기 시스템');
+    const [subtitle, setSubtitle] = useState(() => localStorage.getItem('spinningWheelSubtitle') || '가장 현실감 있는 뽑기');
 
     const [presets, setPresets] = useState(() => {
       try {
@@ -1197,12 +1224,31 @@
     }, [presets]);
 
     const wheelItems = useMemo(() => {
-      if (items.length === 0) return [];
-      if (items.length > 0 && items.length < 16) {
-        const multiplier = Math.ceil(16 / items.length);
-        return Array.from({ length: multiplier }, () => items).flat();
+      if (items.length === 0) {
+        return [];
       }
-      return items;
+      const expandedItems = items.flatMap(itemStr => {
+        const trimmedItemStr = itemStr.trim();
+        if (!trimmedItemStr) return [];
+        const match = trimmedItemStr.match(/^(.*)\*(\d+)$/);
+        if (match) {
+          const text = match[1].trim();
+          const weight = parseInt(match[2], 10);
+          if (text && weight > 0) {
+            return Array(weight).fill(text);
+          }
+          return [];
+        }
+        return [trimmedItemStr];
+      });
+      if (expandedItems.length === 0) {
+        return [];
+      }
+      if (expandedItems.length > 0 && expandedItems.length < 16) {
+        const multiplier = Math.ceil(16 / expandedItems.length);
+        return Array.from({ length: multiplier }, () => expandedItems).flat();
+      }
+      return expandedItems;
     }, [items]);
 
     const handleItemsChange = useCallback((newItems) => { setItems(newItems); }, []);
@@ -1211,8 +1257,15 @@
     const handleCloseModal = useCallback(() => { setWinner(null); }, []);
 
     const handleDeleteWinner = useCallback((winnerToDelete) => {
-        setItems(prevItems => prevItems.filter(item => item !== winnerToDelete));
-        setWinner(null);
+      setItems(prevItems => prevItems.filter(itemStr => {
+        const trimmedItemStr = itemStr.trim();
+        if (!trimmedItemStr) return false;
+        const match = trimmedItemStr.match(/^(.*)\*(\d+)$/);
+        const text = match ? match[1].trim() : trimmedItemStr;
+        if (!text) return false;
+        return text !== winnerToDelete;
+      }));
+      setWinner(null);
     }, []);
 
     const toggleFullscreen = useCallback(() => {

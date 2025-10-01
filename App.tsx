@@ -84,7 +84,7 @@ const EditableText: React.FC<EditableTextProps> = ({ initialValue, onSave, class
 
 const App: React.FC = () => {
   const [title, setTitle] = useState<string>(() => localStorage.getItem('spinningWheelTitle') || '돌려돌려~ 돌림판!');
-  const [subtitle, setSubtitle] = useState<string>(() => localStorage.getItem('spinningWheelSubtitle') || '햇반 뽑기 시스템');
+  const [subtitle, setSubtitle] = useState<string>(() => localStorage.getItem('spinningWheelSubtitle') || '가장 현실감 있는 뽑기');
   
   const [presets, setPresets] = useState<Preset[]>(() => {
     try {
@@ -324,11 +324,34 @@ const App: React.FC = () => {
     if (items.length === 0) {
         return [];
     }
-    if (items.length > 0 && items.length < 16) {
-        const multiplier = Math.ceil(16 / items.length);
-        return Array.from({ length: multiplier }, () => items).flat();
+
+    const expandedItems = items.flatMap(itemStr => {
+      const trimmedItemStr = itemStr.trim();
+      if (!trimmedItemStr) return [];
+
+      const match = trimmedItemStr.match(/^(.*)\*(\d+)$/);
+      if (match) {
+        const text = match[1].trim();
+        const weight = parseInt(match[2], 10);
+        if (text && weight > 0) {
+          return Array(weight).fill(text);
+        }
+        return []; // 텍스트가 없거나 가중치가 0 이하인 경우 무시
+      }
+      return [trimmedItemStr];
+    });
+
+    if (expandedItems.length === 0) {
+        return [];
     }
-    return items;
+    
+    // 복제 로직은 그대로 유지하여 최소 16개 항목을 보장합니다.
+    // 이는 시각적 안정성과 부드러운 회전 경험을 위함입니다.
+    if (expandedItems.length > 0 && expandedItems.length < 16) {
+        const multiplier = Math.ceil(16 / expandedItems.length);
+        return Array.from({ length: multiplier }, () => expandedItems).flat();
+    }
+    return expandedItems;
   }, [items]);
 
 
@@ -349,7 +372,18 @@ const App: React.FC = () => {
   }, []);
 
   const handleDeleteWinner = useCallback((winnerToDelete: string) => {
-    setItems(prevItems => prevItems.filter(item => item !== winnerToDelete));
+    setItems(prevItems => prevItems.filter(itemStr => {
+      const trimmedItemStr = itemStr.trim();
+      if (!trimmedItemStr) return false;
+
+      const match = trimmedItemStr.match(/^(.*)\*(\d+)$/);
+      const text = match ? match[1].trim() : trimmedItemStr;
+      
+      // 텍스트가 비어있는 항목은 삭제 과정에서 항상 제거될 수 있습니다.
+      if (!text) return false;
+
+      return text !== winnerToDelete;
+    }));
     setWinner(null); // 모달도 닫습니다.
   }, []);
 
