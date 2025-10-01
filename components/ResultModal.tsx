@@ -33,28 +33,62 @@ const ResultModal: React.FC<ResultModalProps> = ({ winner, onClose, onDeleteWinn
   const audioContextRef = useRef<AudioContext | null>(null);
 
   const playFanfare = useCallback((audioContext: AudioContext) => {
-    const playNote = (frequency: number, startTime: number, duration: number) => {
-      const oscillator = audioContext.createOscillator();
+    const playNote = (
+      frequency: number,
+      startTime: number,
+      duration: number,
+      volume: number = 0.3,
+      type1: OscillatorType = 'sawtooth',
+      type2: OscillatorType = 'square'
+    ) => {
+      // Layering oscillators for a richer, brassy tone
+      const osc1 = audioContext.createOscillator();
+      const osc2 = audioContext.createOscillator();
       const gainNode = audioContext.createGain();
-      oscillator.connect(gainNode);
+
+      osc1.connect(gainNode);
+      osc2.connect(gainNode);
       gainNode.connect(audioContext.destination);
-      oscillator.type = 'sawtooth';
-      oscillator.frequency.setValueAtTime(frequency, startTime);
+
+      osc1.type = type1;
+      osc2.type = type2;
+
+      osc1.frequency.setValueAtTime(frequency, startTime);
+      // Slightly detune the second oscillator for a chorus effect
+      osc2.frequency.setValueAtTime(frequency * 1.005, startTime);
+
+      // ADSR-like envelope for a punchier sound
       gainNode.gain.setValueAtTime(0, startTime);
-      gainNode.gain.linearRampToValueAtTime(0.4, startTime + 0.05); // Attack
-      gainNode.gain.linearRampToValueAtTime(0, startTime + duration);   // Decay
-      oscillator.start(startTime);
-      oscillator.stop(startTime + duration);
+      gainNode.gain.linearRampToValueAtTime(volume, startTime + 0.02); // Fast attack
+      gainNode.gain.exponentialRampToValueAtTime(volume * 0.7, startTime + 0.1); // Decay
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + duration); // Release
+
+      osc1.start(startTime);
+      osc1.stop(startTime + duration);
+      osc2.start(startTime);
+      osc2.stop(startTime + duration);
     };
 
     const now = audioContext.currentTime;
+    // Frequencies for a C major scale
     const C4 = 261.63;
     const G4 = 392.00;
     const C5 = 523.25;
+    const E5 = 659.25;
+    const G5 = 783.99;
 
-    playNote(C4, now, 0.15);
-    playNote(G4, now + 0.2, 0.15);
-    playNote(C5, now + 0.4, 0.5);
+    const short = 0.15;
+    const long = 1.0;
+
+    // Phrase 1: Quick ascending arpeggio
+    playNote(C4, now, short, 0.3);
+    playNote(G4, now + short, short, 0.3);
+    
+    // Phrase 2: The final, rich C-major chord
+    const chordTime = now + short * 2;
+    playNote(C5, chordTime, long, 0.4);  // Root
+    playNote(E5, chordTime, long, 0.32); // Major third
+    playNote(G5, chordTime, long, 0.25); // Perfect fifth
   }, []);
 
   const handleConfettiAnimationEnd = useCallback((id: number) => {
