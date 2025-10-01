@@ -23,6 +23,7 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
   const isReversingRef = useRef(false);
   const animationFrameRef = useRef<number | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const tickBufferRef = useRef<AudioBuffer | null>(null); // 오디오 버퍼를 위한 Ref 추가
 
   // 드래그/스와이프를 위한 Ref
   const wheelContainerRef = useRef<HTMLDivElement>(null);
@@ -58,23 +59,14 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
   const radius = size / 2 - 10;
 
   const playTickSound = useCallback(() => {
-    if (!audioContextRef.current) return;
+    if (!audioContextRef.current || !tickBufferRef.current) return;
     const audioContext = audioContextRef.current;
-
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-
-    oscillator.type = 'triangle';
-    oscillator.frequency.setValueAtTime(1200, audioContext.currentTime);
-
-    gainNode.gain.setValueAtTime(0.4, audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.05);
-
-    oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + 0.05);
+    
+    // 버퍼 소스 노드를 생성하고 버퍼를 할당합니다.
+    const source = audioContext.createBufferSource();
+    source.buffer = tickBufferRef.current;
+    source.connect(audioContext.destination);
+    source.start(); // 즉시 재생
   }, []);
 
   // 물리 기반 애니메이션 루프
@@ -210,7 +202,7 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
     animationFrameRef.current = requestAnimationFrame(animate);
   }, [items, onSpinEnd, playTickSound]);
 
-  const startSpin = useCallback((initialVelocity: number) => {
+  const startSpin = useCallback(async (initialVelocity: number) => {
     if (isSpinningRef.current || items.length < 2) return;
 
     if (!audioContextRef.current) {
@@ -218,6 +210,32 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
             audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
         } catch (e) {
             console.error("Web Audio API is not supported in this browser.");
+        }
+    }
+    
+    // 성능을 위해 틱 소리를 버퍼에 미리 렌더링합니다.
+    if (audioContextRef.current && !tickBufferRef.current) {
+        try {
+            const context = audioContextRef.current;
+            const duration = 0.05;
+            const frameCount = context.sampleRate * duration;
+            const offlineContext = new OfflineAudioContext(1, frameCount, context.sampleRate);
+            
+            const oscillator = offlineContext.createOscillator();
+            const gainNode = offlineContext.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(offlineContext.destination);
+
+            oscillator.type = 'triangle';
+            oscillator.frequency.setValueAtTime(1200, 0);
+            gainNode.gain.setValueAtTime(0.4, 0);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, duration);
+            oscillator.start(0);
+            
+            tickBufferRef.current = await offlineContext.startRendering();
+        } catch(e) {
+            console.error('오디오 틱 버퍼를 생성하는 데 실패했습니다:', e);
         }
     }
     

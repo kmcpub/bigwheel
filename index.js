@@ -471,6 +471,7 @@
     const isReversingRef = useRef(false);
     const animationFrameRef = useRef(null);
     const audioContextRef = useRef(null);
+    const tickBufferRef = useRef(null);
     
     const wheelContainerRef = useRef(null);
     const isDraggingRef = useRef(false);
@@ -501,18 +502,12 @@
     const radius = size / 2 - 10;
 
     const playTickSound = useCallback(() => {
-      if (!audioContextRef.current) return;
-      const audioContext = audioContextRef.current;
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-      oscillator.type = 'triangle';
-      oscillator.frequency.setValueAtTime(1200, audioContext.currentTime);
-      gainNode.gain.setValueAtTime(0.4, audioContext.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.05);
-      oscillator.start(audioContext.currentTime);
-      oscillator.stop(audioContext.currentTime + 0.05);
+        if (!audioContextRef.current || !tickBufferRef.current) return;
+        const audioContext = audioContextRef.current;
+        const source = audioContext.createBufferSource();
+        source.buffer = tickBufferRef.current;
+        source.connect(audioContext.destination);
+        source.start();
     }, []);
 
     const animate = useCallback(() => {
@@ -625,13 +620,33 @@
       animationFrameRef.current = requestAnimationFrame(animate);
     }, [items, onSpinEnd, playTickSound]);
 
-    const startSpin = useCallback((initialVelocity) => {
+    const startSpin = useCallback(async (initialVelocity) => {
         if (isSpinningRef.current || items.length < 2) return;
         if (!audioContextRef.current) {
             try {
                 audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
             } catch (e) {
                 console.error("Web Audio API is not supported in this browser.");
+            }
+        }
+        if (audioContextRef.current && !tickBufferRef.current) {
+            try {
+                const context = audioContextRef.current;
+                const duration = 0.05;
+                const frameCount = context.sampleRate * duration;
+                const offlineContext = new OfflineAudioContext(1, frameCount, context.sampleRate);
+                const oscillator = offlineContext.createOscillator();
+                const gainNode = offlineContext.createGain();
+                oscillator.connect(gainNode);
+                gainNode.connect(offlineContext.destination);
+                oscillator.type = 'triangle';
+                oscillator.frequency.setValueAtTime(1200, 0);
+                gainNode.gain.setValueAtTime(0.4, 0);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, duration);
+                oscillator.start(0);
+                tickBufferRef.current = await offlineContext.startRendering();
+            } catch (e) {
+                console.error('오디오 틱 버퍼를 생성하는 데 실패했습니다:', e);
             }
         }
         isSpinningRef.current = true;
