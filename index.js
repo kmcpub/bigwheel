@@ -100,6 +100,11 @@
       if (winner) {
         setIsVisible(true);
         
+        // 당첨 시 진동 효과
+        if ('vibrate' in navigator) {
+            navigator.vibrate([100, 50, 100, 50, 300]); // 짧은 진동 두 번, 긴 진동 한 번
+        }
+        
         // 팡파레 생성 및 재생
         try {
           if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
@@ -462,7 +467,7 @@
                     title: "선택 목록 삭제"
                 },
                     createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-5 w-5", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2.5 },
-                        createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" })
+                        createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M19 7l-.867 12.142A2 2 O 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" })
                     )
                 )
             )
@@ -1012,6 +1017,125 @@
     const [showScreenPicker, setShowScreenPicker] = useState(false);
     const wheelContainerRef = useRef(null);
     const [collapsedVisibleHeight, setCollapsedVisibleHeight] = useState(128);
+    const [isMuted, setIsMuted] = useState(true);
+    const audioContextRef = useRef(null);
+    const bgmBufferRef = useRef(null);
+    const bgmSourceRef = useRef(null);
+    const isGeneratingBgmRef = useRef(false);
+
+    const createBgm = useCallback(async (audioContext) => {
+        const tempo = 140;
+        const beatDuration = 60 / tempo;
+        const noteDuration16th = beatDuration / 4;
+        const totalBars = 16;
+        const totalDuration = totalBars * 4 * beatDuration;
+        const offlineCtx = new OfflineAudioContext(2, Math.ceil(audioContext.sampleRate * totalDuration), audioContext.sampleRate);
+
+        const playNote = (oscType, freq, time, duration, volume, adsr) => {
+            if (freq === null) return;
+            const osc = offlineCtx.createOscillator();
+            osc.type = oscType;
+            const gain = offlineCtx.createGain();
+            osc.connect(gain);
+            gain.connect(offlineCtx.destination);
+            osc.frequency.setValueAtTime(freq, time);
+            gain.gain.setValueAtTime(0, time);
+            gain.gain.linearRampToValueAtTime(volume * adsr.sustain, time + adsr.attack);
+            gain.gain.exponentialRampToValueAtTime(volume, time + adsr.attack + adsr.decay);
+            gain.gain.linearRampToValueAtTime(0, time + duration);
+            osc.start(time);
+            osc.stop(time + duration);
+        };
+        const playDrum = (type, time) => {
+            if (type === 'kick') {
+                const osc = offlineCtx.createOscillator();
+                const gain = offlineCtx.createGain();
+                osc.connect(gain);
+                gain.connect(offlineCtx.destination);
+                osc.frequency.setValueAtTime(150, time);
+                osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.1);
+                gain.gain.setValueAtTime(0.5, time);
+                gain.gain.exponentialRampToValueAtTime(0.01, time + 0.1);
+                osc.start(time);
+                osc.stop(time + 0.1);
+            } else {
+                const noise = offlineCtx.createBufferSource();
+                const bufferSize = offlineCtx.sampleRate * 0.1;
+                const buffer = offlineCtx.createBuffer(1, bufferSize, offlineCtx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+                noise.buffer = buffer;
+                const filter = offlineCtx.createBiquadFilter();
+                filter.type = 'highpass';
+                filter.frequency.value = 1500;
+                const gain = offlineCtx.createGain();
+                gain.gain.setValueAtTime(0.4, time);
+                gain.gain.exponentialRampToValueAtTime(0.01, time + 0.08);
+                noise.connect(filter).connect(gain).connect(offlineCtx.destination);
+                noise.start(time);
+                noise.stop(time + 0.08);
+            }
+        };
+        const n = { C3: 130.81, F3: 174.61, G3: 196.00, G4: 392.00, A4: 440.00, C5: 523.25, D5: 587.33, E5: 659.25, F5: 698.46, G5: 783.99 };
+        const melody = [n.C5, n.E5, n.G4, n.E5, null, n.C5, null, n.E5, n.G5, n.F5, n.E5, n.D5, n.C5, null, null, null, n.D5, n.F5, n.A4, n.F5, null, n.D5, null, n.F5, n.A4, n.G4, n.F5, n.E5, n.D5, null, null, null];
+        const bassline = [n.C3, null, n.C3, null, n.C3, null, null, null, n.F3, null, n.F3, null, n.F3, null, null, null, n.G3, null, n.G3, null, n.G3, null, null, null, n.C3, null, n.C3, null, n.G3, null, null, null];
+        for (let bar = 0; bar < totalBars; bar++) {
+            for (let beat = 0; beat < 4; beat++) {
+                const time = (bar * 4 + beat) * beatDuration;
+                playDrum('kick', time);
+                if (beat % 2 === 1) playDrum('snare', time);
+                for (let i = 0; i < 4; i++) {
+                    const step = beat * 4 + i;
+                    const noteTime = time + i * noteDuration16th;
+                    const patternIndex = (bar * 16 + step) % 32;
+                    playNote('square', melody[patternIndex], noteTime, noteDuration16th * 0.9, 0.05, { attack: 0.01, decay: 0.02, sustain: 0.8 });
+                    playNote('triangle', bassline[patternIndex], noteTime, noteDuration16th, 0.125, { attack: 0.01, decay: 0.1, sustain: 0.5 });
+                }
+            }
+        }
+        return await offlineCtx.startRendering();
+    }, []);
+
+    useEffect(() => {
+        const playBgm = async () => {
+            if (!audioContextRef.current) {
+                try {
+                    audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+                } catch (e) {
+                    console.error("Web Audio API가 이 브라우저에서 지원되지 않습니다."); return;
+                }
+            }
+            const audioContext = audioContextRef.current;
+            if (audioContext.state === 'suspended') await audioContext.resume();
+            if (!bgmBufferRef.current && !isGeneratingBgmRef.current) {
+                isGeneratingBgmRef.current = true;
+                try {
+                    bgmBufferRef.current = await createBgm(audioContext);
+                } catch (e) { console.error("BGM 생성 실패", e); } 
+                finally { isGeneratingBgmRef.current = false; }
+            }
+            if (bgmBufferRef.current && bgmSourceRef.current === null) {
+                const source = audioContext.createBufferSource();
+                source.buffer = bgmBufferRef.current;
+                source.loop = true;
+                source.connect(audioContext.destination);
+                source.start(0);
+                bgmSourceRef.current = source;
+            }
+        };
+        const stopBgm = () => {
+            if (bgmSourceRef.current) {
+                bgmSourceRef.current.stop();
+                bgmSourceRef.current.disconnect();
+                bgmSourceRef.current = null;
+            }
+        };
+        if (!isMuted) playBgm();
+        else stopBgm();
+        return () => { stopBgm(); };
+    }, [isMuted, createBgm]);
+
+    const toggleMute = () => setIsMuted(m => !m);
     
     useEffect(() => {
         const calculateHeight = () => {
@@ -1160,6 +1284,20 @@
         createElement(ScreenPickerModal, { show: showScreenPicker, screens: screens, onSelect: enterFullscreenOnScreen, onClose: () => setShowScreenPicker(false) })
       ),
       createElement("div", { className: "fixed bottom-4 right-4 z-30 flex flex-col items-end gap-3" },
+        createElement("button", {
+            onClick: toggleMute,
+            className: "bg-slate-700 hover:bg-slate-600 text-white font-bold w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-colors",
+            "aria-label": isMuted ? "BGM 켜기" : "BGM 끄기"
+        },
+            isMuted ?
+                createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-6 w-6", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2 },
+                    createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .89-1.077 1.337-1.707.707L5.586 15z", clipRule: "evenodd" }),
+                    createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M17 14l-4-4m0 4l4-4" })
+                ) :
+                createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-6 w-6", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2 },
+                    createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .89-1.077 1.337-1.707.707L5.586 15z" })
+                )
+        ),
         createElement("button", { onClick: toggleFullscreen, className: "bg-slate-700 hover:bg-slate-600 text-white font-bold w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-colors", "aria-label": isFullscreen ? "전체 화면 종료" : "전체 화면 시작" },
           isFullscreen ?
             createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-6 w-6", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2 },

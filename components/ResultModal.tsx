@@ -99,6 +99,11 @@ const ResultModal: React.FC<ResultModalProps> = ({ winner, onClose, onDeleteWinn
     let interval: ReturnType<typeof setInterval> | null = null;
     if (winner) {
       setIsVisible(true);
+      
+      // 당첨 시 진동 효과
+      if ('vibrate' in navigator) {
+        navigator.vibrate([100, 50, 100, 50, 300]); // 짧은 진동 두 번, 긴 진동 한 번
+      }
 
       // 팡파레 생성 및 재생
       try {
