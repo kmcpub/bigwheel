@@ -30,17 +30,54 @@ const ResultModal: React.FC<ResultModalProps> = ({ winner, onClose, onDeleteWinn
   const [confetti, setConfetti] = useState<ConfettiState[]>([]);
   const [isVisible, setIsVisible] = useState(false);
   const nextId = useRef(0);
+  const audioContextRef = useRef<AudioContext | null>(null);
+
+  const playFanfare = useCallback((audioContext: AudioContext) => {
+    const playNote = (frequency: number, startTime: number, duration: number) => {
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      oscillator.type = 'sawtooth';
+      oscillator.frequency.setValueAtTime(frequency, startTime);
+      gainNode.gain.setValueAtTime(0, startTime);
+      gainNode.gain.linearRampToValueAtTime(0.4, startTime + 0.05); // Attack
+      gainNode.gain.linearRampToValueAtTime(0, startTime + duration);   // Decay
+      oscillator.start(startTime);
+      oscillator.stop(startTime + duration);
+    };
+
+    const now = audioContext.currentTime;
+    const C4 = 261.63;
+    const G4 = 392.00;
+    const C5 = 523.25;
+
+    playNote(C4, now, 0.15);
+    playNote(G4, now + 0.2, 0.15);
+    playNote(C5, now + 0.4, 0.5);
+  }, []);
 
   const handleConfettiAnimationEnd = useCallback((id: number) => {
     setConfetti(current => current.filter(c => c.id !== id));
   }, []);
   
   useEffect(() => {
-    // FIX: Replaced NodeJS.Timeout with ReturnType<typeof setInterval> to use the correct return type
-    // for setInterval in the current environment (which is `number` in the browser).
     let interval: ReturnType<typeof setInterval> | null = null;
     if (winner) {
       setIsVisible(true);
+
+      // 팡파레 생성 및 재생
+      try {
+        if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+          audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        }
+        if (audioContextRef.current.state === 'suspended') {
+            audioContextRef.current.resume();
+        }
+        playFanfare(audioContextRef.current);
+      } catch (e) {
+        console.error("오디오 컨텍스트를 생성하거나 팡파레를 재생할 수 없습니다:", e);
+      }
       
       const addConfetti = () => {
         const newPieces: ConfettiState[] = Array.from({ length: 10 }).map(() => {
@@ -63,12 +100,18 @@ const ResultModal: React.FC<ResultModalProps> = ({ winner, onClose, onDeleteWinn
 
     } else {
       setIsVisible(false);
+      // 모달이 닫힐 때 오디오 컨텍스트 정리
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        audioContextRef.current.close().then(() => {
+          audioContextRef.current = null;
+        });
+      }
     }
     
     return () => {
       if(interval) clearInterval(interval);
     }
-  }, [winner]);
+  }, [winner, playFanfare]);
   
   const handleTransitionEnd = () => {
     if (!winner) {
