@@ -306,7 +306,7 @@ const Controls: React.FC<ControlsProps> = ({ initialItems, onItemsChange, onShuf
       >
         <div 
           className="bg-slate-800 lg:p-6 rounded-t-2xl lg:rounded-lg shadow-2xl h-full flex flex-col"
-          style={isMobile && isExpanded ? { height: expandedHeight } : {}}
+          style={isMobile ? { height: expandedHeight } : {}}
         >
           {/* Mobile handle */}
           <div

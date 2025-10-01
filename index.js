@@ -436,7 +436,7 @@
       },
         createElement("div", {
           className: "bg-slate-800 lg:p-6 rounded-t-2xl lg:rounded-lg shadow-2xl h-full flex flex-col",
-          style: isMobile && isExpanded ? { height: expandedHeight } : {}
+          style: isMobile ? { height: expandedHeight } : {}
         },
           createElement("div", {
             className: "w-full py-4 flex-shrink-0 flex justify-center items-center cursor-grab lg:hidden",
