@@ -243,6 +243,9 @@
   const Controls = ({ initialItems, onItemsChange, onShuffle, presets, setPresets, selectedPresetId, setSelectedPresetId }) => {
     const [text, setText] = useState(initialItems.join('\n'));
     const isComposingRef = useRef(false);
+    const [isExpanded, setIsExpanded] = useState(false);
+    const dragStartY = useRef(0);
+    const isDragging = useRef(false);
 
     useEffect(() => {
       const itemsFromCurrentText = text.split('\n').map(item => item.trim()).filter(item => item.length > 0);
@@ -250,6 +253,16 @@
           setText(initialItems.join('\n'));
       }
     }, [initialItems]);
+    
+    useEffect(() => {
+      const handleResize = () => {
+        if (window.innerWidth >= 1024) {
+          setIsExpanded(false);
+        }
+      };
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     const handleTextChange = useCallback((event) => {
       const newText = event.target.value;
@@ -290,9 +303,38 @@
       setPresets(prev => prev.filter(p => p.id !== selectedPresetId));
       setSelectedPresetId(null);
     };
+    
+    const handlePointerDown = (e) => {
+      isDragging.current = true;
+      dragStartY.current = e.clientY;
+      e.target.setPointerCapture(e.pointerId);
+    };
 
+    const handlePointerUp = (e) => {
+      if (!isDragging.current) return;
+      isDragging.current = false;
+      const deltaY = e.clientY - dragStartY.current;
+      if (Math.abs(deltaY) > 50) {
+        setIsExpanded(deltaY < 0);
+      } else {
+        setIsExpanded(prev => !prev);
+      }
+      e.target.releasePointerCapture(e.pointerId);
+    };
 
-    return createElement("div", { className: "bg-slate-800 p-6 rounded-lg shadow-2xl h-full flex flex-col overflow-y-auto" },
+    const handlePointerMove = (e) => {
+      if (isDragging.current) {
+        e.preventDefault();
+      }
+    };
+    
+    const handleTextareaFocus = () => {
+      if (window.innerWidth < 1024) {
+        setIsExpanded(true);
+      }
+    };
+
+    const controlsContent = createElement("div", { className: "px-6 pb-6 lg:p-0 h-full flex flex-col overflow-y-auto" },
       createElement("h2", { className: "text-2xl font-bold mb-4 text-cyan-400" }, "돌림판 설정"),
       createElement("div", { className: "mb-4" },
         createElement("h3", { className: "font-semibold mb-2 text-gray-300" }, "미리 설정된 목록"),
@@ -351,6 +393,7 @@
           onChange: handleTextChange,
           onCompositionStart: handleCompositionStart,
           onCompositionEnd: handleCompositionEnd,
+          onFocus: handleTextareaFocus,
           className: "w-full flex-grow bg-slate-700 text-gray-200 p-3 rounded-md border-2 border-slate-600 focus:border-cyan-500 focus:outline-none focus:ring-0 transition-colors",
           placeholder: "항목 1\n항목 2\n항목 3",
           rows: 5
@@ -367,6 +410,34 @@
             },
             className: "w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md shadow-md transform transition-all duration-300 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-red-300"
           }, "전체 삭제")
+        )
+      )
+    );
+
+    return createElement(Fragment, null,
+      isExpanded && createElement("div", { className: "fixed inset-0 bg-black/60 z-20 lg:hidden", onClick: () => setIsExpanded(false) }),
+      createElement("div", {
+        className: `
+        lg:h-full lg:relative lg:transform-none
+        fixed inset-x-0 bottom-0 z-30
+        transition-transform duration-300 ease-out
+        ${isExpanded ? 'translate-y-0' : 'translate-y-[calc(100%-128px)]'}
+      `},
+        createElement("div", {
+          className: "bg-slate-800 lg:p-6 rounded-t-2xl lg:rounded-lg shadow-2xl h-full flex flex-col",
+          style: isExpanded ? { height: '85dvh' } : {}
+        },
+          createElement("div", {
+            className: "w-full py-4 flex-shrink-0 flex justify-center items-center cursor-grab lg:hidden",
+            onPointerDown: handlePointerDown,
+            onPointerUp: handlePointerUp,
+            onPointerMove: handlePointerMove,
+            style: { touchAction: 'none' },
+            "aria-label": isExpanded ? "설정 패널 축소" : "설정 패널 확장"
+          }, 
+            createElement("div", { className: "w-10 h-1.5 bg-slate-600 rounded-full" })
+          ),
+          controlsContent
         )
       )
     );
