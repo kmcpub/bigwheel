@@ -59,6 +59,10 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
   const radius = size / 2 - 10;
 
   const playTickSound = useCallback(() => {
+    if ('vibrate' in navigator) {
+      navigator.vibrate(15); // 못 소리와 함께 짧은 진동
+    }
+    
     if (!audioContextRef.current || !tickBufferRef.current) return;
     const audioContext = audioContextRef.current;
     
