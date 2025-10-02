@@ -937,6 +937,7 @@
         )
       ),
       createElement("button", {
+        onPointerDown: (e) => e.stopPropagation(),
         onClick: handleSpin,
         disabled: isSpinning || items.length < 2,
         className: "absolute z-10 bg-cyan-500 hover:bg-cyan-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold w-24 h-24 rounded-full shadow-lg transform transition-all duration-300 hover:scale-110 focus:outline-none focus:ring-4 focus:ring-cyan-300 flex items-center justify-center text-xl",
