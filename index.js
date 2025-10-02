@@ -11,8 +11,46 @@
     '#f472b6', '#fb7185',
   ];
   const DEFAULT_PRESETS = [
-    { id: 'participants', name: '참가자', items: ['철수*3', '영희*2', '민준', '서연', '지훈', '하은', '도윤', '유진'] },
-    { id: 'numbers', name: '숫자', items: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'] },
+    { 
+      id: 'bonihani', 
+      name: '보니하니', 
+      items: [
+        '어린이용 스마트워치',
+        '어린이백과사전*2',
+        '인형집 세트',
+        '문학동화전집*3',
+        '학용품 세트',
+        '3D 입체블럭교구',
+        '어린이 스킨케어 세트',
+        '캠핑숙박권',
+        '어린이 멀티비타민세트',
+        '영어전집세트*3',
+        '어린이 킥보드',
+        '스케이트보드',
+        '창작동화전집*3',
+        '놀이공원 이용권',
+        '스마트 코딩로봇',
+        '자석블록세트'
+      ] 
+    },
+    { 
+      id: 'people', 
+      name: '인물', 
+      items: [
+        '영수*3',
+        '영호*2',
+        '영식',
+        '영철',
+        '광수',
+        '상철',
+        '순자',
+        '영자',
+        '정숙',
+        '영숙',
+        '옥순',
+        '현숙'
+      ] 
+    },
     { id: 'rps', name: '가위바위보', items: ['가위', '바위', '보'] },
     { id: 'pros-cons', name: '찬반', items: ['찬성', '반대'] },
   ];
@@ -1011,7 +1049,7 @@
   // --- START OF App.tsx ---
   const App = () => {
     const [title, setTitle] = useState(() => localStorage.getItem('spinningWheelTitle') || '돌려돌려~ 돌림판!');
-    const [subtitle, setSubtitle] = useState(() => localStorage.getItem('spinningWheelSubtitle') || '가장 현실감 있는 뽑기');
+    const [subtitle, setSubtitle] = useState(() => localStorage.getItem('spinningWheelSubtitle') || 'Made by KMC');
 
     const [presets, setPresets] = useState(() => {
       try {

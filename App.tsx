@@ -84,7 +84,7 @@ const EditableText: React.FC<EditableTextProps> = ({ initialValue, onSave, class
 
 const App: React.FC = () => {
   const [title, setTitle] = useState<string>(() => localStorage.getItem('spinningWheelTitle') || '돌려돌려~ 돌림판!');
-  const [subtitle, setSubtitle] = useState<string>(() => localStorage.getItem('spinningWheelSubtitle') || '가장 현실감 있는 뽑기');
+  const [subtitle, setSubtitle] = useState<string>(() => localStorage.getItem('spinningWheelSubtitle') || 'Made by KMC');
   
   const [presets, setPresets] = useState<Preset[]>(() => {
     try {
