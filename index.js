@@ -53,20 +53,66 @@
     },
     { id: 'rps', name: '가위바위보', items: ['가위', '바위', '보'] },
     { id: 'pros-cons', name: '찬반', items: ['찬성', '반대'] },
-    {
-      id: 'products',
-      name: '상품',
+    { 
+      id: 'goods', 
+      name: '상품', 
       items: [
-        '소원 성취권', '랜덤 과자', '발표 우선권', '랜덤 과자', '발표 우선권', '랜덤 과자', '발표 우선권', 
-        '급식 우선권', '발표 우선권', '더 큰 과자', '발표 우선권', '랜덤 과자', '발표 우선권', '짝꿍 초대권', 
-        '발표 우선권', '랜덤 과자', '발표 우선권', '더 큰 과자', '랜덤 과자', '발표 우선권', '일일 DJ권', 
-        '발표 우선권', '랜덤 과자', '더 큰 과자', '발표 우선권', '랜덤 과자', '발표 우선권', '일인일역 우선권', 
-        '발표 우선권', '랜덤 과자', '발표 우선권', '더 큰 과자', '랜덤 과자', '발표 우선권', '급식 우선권', 
-        '발표 우선권', '랜덤 과자', '발표 우선권', '더 큰 과자', '발표 우선권', '자리 선택권', '발표 우선권', 
-        '랜덤 과자', '발표 우선권', '더 큰 과자', '랜덤 과자', '발표 우선권', '일일 DJ권', '발표 우선권', 
-        '랜덤 과자', '더 큰 과자', '발표 우선권', '랜덤 과자', '발표 우선권'
+        '소원 성취권',
+        '랜덤 과자',
+        '발표 우선권',
+        '랜덤 과자',
+        '발표 우선권',
+        '랜덤 과자',
+        '발표 우선권',
+        '급식 우선권',
+        '발표 우선권',
+        '더 큰 과자',
+        '발표 우선권',
+        '랜덤 과자',
+        '발표 우선권',
+        '짝꿍 초대권',
+        '발표 우선권',
+        '랜덤 과자',
+        '발표 우선권',
+        '더 큰 과자',
+        '랜덤 과자',
+        '발표 우선권',
+        '일일 DJ권',
+        '발표 우선권',
+        '랜덤 과자',
+        '더 큰 과자',
+        '발표 우선권',
+        '랜덤 과자',
+        '발표 우선권',
+        '일인일역 우선권',
+        '발표 우선권',
+        '랜덤 과자',
+        '발표 우선권',
+        '더 큰 과자',
+        '랜덤 과자',
+        '발표 우선권',
+        '급식 우선권',
+        '발표 우선권',
+        '랜덤 과자',
+        '발표 우선권',
+        '더 큰 과자',
+        '발표 우선권',
+        '자리 선택권',
+        '발표 우선권',
+        '랜덤 과자',
+        '발표 우선권',
+        '더 큰 과자',
+        '랜덤 과자',
+        '발표 우선권',
+        '일일 DJ권',
+        '발표 우선권',
+        '랜덤 과자',
+        '더 큰 과자',
+        '발표 우선권',
+        '랜덤 과자',
+        '발표 우선권',
       ]
-    }
+    },
   ];
 
   // --- START OF components/ResultModal.tsx ---
@@ -626,18 +672,19 @@
     const animationFrameRef = useRef(null);
     const audioContextRef = useRef(null);
     const tickBufferRef = useRef(null);
-    const boosterAnimRef = useRef({
-      active: false,
-      startTime: 0,
-      startRotation: 0,
-      targetRotation: 0,
-      duration: 900,
-    });
     
     const wheelContainerRef = useRef(null);
     const isDraggingRef = useRef(false);
     const lastPointerAngleRef = useRef(0);
     const velocityHistoryRef = useRef([]);
+
+    const boosterAnimState = useRef({
+      startTime: 0,
+      startRotation: 0,
+      targetRotation: 0,
+      winnerIndex: 0,
+      lastRotation: 0,
+    });
 
     const colorMap = useMemo(() => {
       const map = new Map();
@@ -664,7 +711,7 @@
 
     const playTickSound = useCallback(() => {
         if ('vibrate' in navigator) {
-            navigator.vibrate(15); // 못 소리와 함께 짧은 진동
+            navigator.vibrate(15);
         }
         if (!audioContextRef.current || !tickBufferRef.current) return;
         const audioContext = audioContextRef.current;
@@ -673,6 +720,54 @@
         source.connect(audioContext.destination);
         source.start();
     }, []);
+
+    const easeOutQuint = (x) => 1 - Math.pow(1 - x, 5);
+
+    const boosterAnimate = useCallback(() => {
+      const DURATION = 900;
+      const { startTime, startRotation, targetRotation, winnerIndex } = boosterAnimState.current;
+      
+      const elapsed = performance.now() - startTime;
+      const progress = Math.min(elapsed / DURATION, 1);
+      const easedProgress = easeOutQuint(progress);
+
+      const currentRotation = startRotation + (targetRotation - startRotation) * easedProgress;
+      
+      rotationRef.current = currentRotation;
+      setRotation(currentRotation);
+      
+      const POINTER_STIFFNESS = 0.3;
+      const POINTER_DAMPING = 0.85;
+      const restoringForce = -pointerRotationRef.current * POINTER_STIFFNESS;
+      pointerVelocityRef.current += restoringForce;
+      pointerVelocityRef.current *= POINTER_DAMPING;
+      pointerRotationRef.current += pointerVelocityRef.current;
+      setPointerRotation(pointerRotationRef.current);
+
+      const segmentAngle = 360 / (items.length || 1);
+      const pointerOffset = 180.0;
+      const lastSegIdx = Math.floor((boosterAnimState.current.lastRotation - pointerOffset) / segmentAngle);
+      const currentSegIdx = Math.floor((currentRotation - pointerOffset) / segmentAngle);
+
+      if (currentSegIdx !== lastSegIdx) {
+          playTickSound();
+          const kickVelocity = 15 + Math.random() * 5;
+          if (pointerRotationRef.current > 0) pointerRotationRef.current = 0;
+          pointerVelocityRef.current = -kickVelocity;
+      }
+      boosterAnimState.current.lastRotation = currentRotation;
+
+      if (progress < 1) {
+          animationFrameRef.current = requestAnimationFrame(boosterAnimate);
+      } else {
+          animationFrameRef.current = null;
+          isSpinningRef.current = false;
+          setIsSpinning(false);
+          if (items[winnerIndex]) {
+              onSpinEnd(items[winnerIndex]);
+          }
+      }
+    }, [items, onSpinEnd, playTickSound]);
 
     const animate = useCallback(() => {
       const POINTER_STIFFNESS = 0.3;
@@ -684,139 +779,96 @@
       setPointerRotation(pointerRotationRef.current);
 
       if (isSpinningRef.current) {
-        const segmentAngle = 360 / (items.length || 1);
-        const pointerOffset = 180.0;
+        const HIGH_SPEED_THRESHOLD = 15.0;
+        const LOW_SPEED_THRESHOLD = 5.0;
+        const HIGH_FRICTION = 0.985;
+        const LOW_FRICTION = 0.998;
         
-        if (boosterAnimRef.current.active) {
-            const anim = boosterAnimRef.current;
-            const elapsedTime = performance.now() - anim.startTime;
-            const progress = Math.min(elapsedTime / anim.duration, 1);
-            
-            const easedProgress = 1 - Math.pow(1 - progress, 3);
-            
-            const newRotation = anim.startRotation + (anim.targetRotation - anim.startRotation) * easedProgress;
+        const currentVelocity = Math.abs(velocityRef.current);
+        let currentFriction;
 
-            const lastSegmentIndex = Math.floor((rotationRef.current - pointerOffset) / segmentAngle);
-            const currentSegmentIndex = Math.floor((newRotation - pointerOffset) / segmentAngle);
-            
-            if (currentSegmentIndex !== lastSegmentIndex) {
-              playTickSound();
-              const kickVelocity = 15;
-              const spinDirection = Math.sign(anim.targetRotation - anim.startRotation);
-              if (spinDirection >= 0) { // Assume positive rotation is CCW
-                  if (pointerRotationRef.current > 0) pointerRotationRef.current = 0;
-                  pointerVelocityRef.current = -kickVelocity;
-              } else {
-                  if (pointerRotationRef.current < 0) pointerRotationRef.current = 0;
-                  pointerVelocityRef.current = kickVelocity;
-              }
-            }
-
-            rotationRef.current = newRotation;
-            setRotation(newRotation);
-
-            if (progress >= 1) {
-                anim.active = false;
-                isSpinningRef.current = false;
-                setIsSpinning(false);
-                
-                const finalRotation = rotationRef.current;
-                const degrees = (180 - (finalRotation % 360) + 360) % 360;
-                const winningSegmentIndex = Math.floor(degrees / segmentAngle);
-                if (items[winningSegmentIndex]) {
-                    onSpinEnd(items[winningSegmentIndex]);
-                }
-            }
+        if (currentVelocity >= HIGH_SPEED_THRESHOLD) {
+            currentFriction = HIGH_FRICTION;
+        } else if (currentVelocity <= LOW_SPEED_THRESHOLD) {
+            currentFriction = LOW_FRICTION;
         } else {
-            const HIGH_SPEED_THRESHOLD = 15.0;
-            const LOW_SPEED_THRESHOLD = 5.0;
-            const HIGH_FRICTION = 0.985;
-            const LOW_FRICTION = 0.998;
-            
-            const currentVelocity = Math.abs(velocityRef.current);
-            let currentFriction;
-
-            if (currentVelocity >= HIGH_SPEED_THRESHOLD) {
-                currentFriction = HIGH_FRICTION;
-            } else if (currentVelocity <= LOW_SPEED_THRESHOLD) {
-                currentFriction = LOW_FRICTION;
-            } else {
-                const progress = (currentVelocity - LOW_SPEED_THRESHOLD) / (HIGH_SPEED_THRESHOLD - LOW_SPEED_THRESHOLD);
-                currentFriction = LOW_FRICTION + progress * (HIGH_FRICTION - LOW_FRICTION);
-            }
-            
-            const GRAVITY_FACTOR = 0.0012;
-            const MIN_VELOCITY_FOR_GRAVITY = 2.0;
-            const STOP_VELOCITY = 0.005;
-            let velocity = velocityRef.current * currentFriction;
-
-            if (Math.abs(velocity) < MIN_VELOCITY_FOR_GRAVITY) {
-              const currentRotation = rotationRef.current + velocity;
-              const rotationAtPointer = currentRotation - 180.0;
-              const angleInSegment = ((rotationAtPointer % segmentAngle) + segmentAngle) % segmentAngle;
-              const distanceFromCenter = angleInSegment - (segmentAngle / 2);
-              const force = -distanceFromCenter * GRAVITY_FACTOR * (MIN_VELOCITY_FOR_GRAVITY - Math.abs(velocity));
-              velocity += force;
-            }
-
-            const nextRotation = rotationRef.current + velocity;
-            const lastSegmentIndex = Math.floor((rotationRef.current - pointerOffset) / segmentAngle);
-            const currentSegmentIndex = Math.floor((nextRotation - pointerOffset) / segmentAngle);
-
-            if (currentSegmentIndex !== lastSegmentIndex) {
-              playTickSound();
-              const kickDirection = Math.sign(velocity) || (currentSegmentIndex > lastSegmentIndex ? 1 : -1);
-              const bounceStrength = Math.abs(velocity);
-              const kickVelocity = 5 + bounceStrength * 2.0;
-
-              if (kickDirection > 0) {
-                if (pointerRotationRef.current > 0) pointerRotationRef.current = 0;
-                pointerVelocityRef.current = -kickVelocity;
-              } else {
-                if (pointerRotationRef.current < 0) pointerRotationRef.current = 0;
-                pointerVelocityRef.current = kickVelocity;
-              }
-              velocity *= 0.96;
-            }
-            
-            if (velocityRef.current >= 0 && velocity < 0) {
-              if (!isReversingRef.current) {
-                isReversingRef.current = true;
-                peakRotationRef.current = rotationRef.current;
-              }
-            }
-
-            if (isReversingRef.current) {
-              const reversedDistance = peakRotationRef.current - (rotationRef.current + velocity);
-              const limit = segmentAngle / 2;
-              if (reversedDistance > limit) {
-                velocity = (peakRotationRef.current - limit) - rotationRef.current;
-                isReversingRef.current = false;
-              }
-            }
-
-            if (Math.abs(velocity) < STOP_VELOCITY) {
-              settlingRef.current = true;
-            }
-
-            if (settlingRef.current && Math.abs(velocity) < 0.001) {
-              velocity = 0;
-              isSpinningRef.current = false;
-              settlingRef.current = false;
-              isReversingRef.current = false;
-              setIsSpinning(false);
-              const finalRotation = rotationRef.current;
-              const degrees = (180 - (finalRotation % 360) + 360) % 360;
-              const winningSegmentIndex = Math.floor(degrees / segmentAngle);
-              if (items[winningSegmentIndex]) {
-                onSpinEnd(items[winningSegmentIndex]);
-              }
-            }
-            velocityRef.current = velocity;
-            rotationRef.current += velocity;
-            lastRotationRef.current = rotationRef.current;
-            setRotation(rotationRef.current);
+            const progress = (currentVelocity - LOW_SPEED_THRESHOLD) / (HIGH_SPEED_THRESHOLD - LOW_SPEED_THRESHOLD);
+            currentFriction = LOW_FRICTION + progress * (HIGH_FRICTION - LOW_FRICTION);
         }
+        
+        const GRAVITY_FACTOR = 0.0012;
+        const MIN_VELOCITY_FOR_GRAVITY = 2.0;
+        const STOP_VELOCITY = 0.005;
+        let velocity = velocityRef.current * currentFriction;
+        const segmentAngle = 360 / (items.length || 1);
+
+        if (Math.abs(velocity) < MIN_VELOCITY_FOR_GRAVITY) {
+          const currentRotation = rotationRef.current + velocity;
+          const rotationAtPointer = currentRotation - 180.0;
+          const angleInSegment = ((rotationAtPointer % segmentAngle) + segmentAngle) % segmentAngle;
+          const distanceFromCenter = angleInSegment - (segmentAngle / 2);
+          const force = -distanceFromCenter * GRAVITY_FACTOR * (MIN_VELOCITY_FOR_GRAVITY - Math.abs(velocity));
+          velocity += force;
+        }
+
+        const nextRotation = rotationRef.current + velocity;
+        const pointerOffset = 180.0;
+        const lastSegmentIndex = Math.floor((rotationRef.current - pointerOffset) / segmentAngle);
+        const currentSegmentIndex = Math.floor((nextRotation - pointerOffset) / segmentAngle);
+
+        if (currentSegmentIndex !== lastSegmentIndex) {
+          playTickSound();
+          const kickDirection = Math.sign(velocity) || (currentSegmentIndex > lastSegmentIndex ? 1 : -1);
+          const bounceStrength = Math.abs(velocity);
+          const kickVelocity = 5 + bounceStrength * 2.0;
+
+          if (kickDirection > 0) {
+            if (pointerRotationRef.current > 0) pointerRotationRef.current = 0;
+            pointerVelocityRef.current = -kickVelocity;
+          } else {
+            if (pointerRotationRef.current < 0) pointerRotationRef.current = 0;
+            pointerVelocityRef.current = kickVelocity;
+          }
+          velocity *= 0.96;
+        }
+        
+        if (velocityRef.current >= 0 && velocity < 0) {
+          if (!isReversingRef.current) {
+            isReversingRef.current = true;
+            peakRotationRef.current = rotationRef.current;
+          }
+        }
+
+        if (isReversingRef.current) {
+          const reversedDistance = peakRotationRef.current - (rotationRef.current + velocity);
+          const limit = segmentAngle / 2;
+          if (reversedDistance > limit) {
+            velocity = (peakRotationRef.current - limit) - rotationRef.current;
+            isReversingRef.current = false;
+          }
+        }
+
+        if (Math.abs(velocity) < STOP_VELOCITY) {
+          settlingRef.current = true;
+        }
+
+        if (settlingRef.current && Math.abs(velocity) < 0.001) {
+          velocity = 0;
+          isSpinningRef.current = false;
+          settlingRef.current = false;
+          isReversingRef.current = false;
+          setIsSpinning(false);
+          const finalRotation = rotationRef.current;
+          const degrees = (180 - (finalRotation % 360) + 360) % 360;
+          const winningSegmentIndex = Math.floor(degrees / segmentAngle);
+          if (items[winningSegmentIndex]) {
+            onSpinEnd(items[winningSegmentIndex]);
+          }
+        }
+        velocityRef.current = velocity;
+        rotationRef.current += velocity;
+        lastRotationRef.current = rotationRef.current;
+        setRotation(rotationRef.current);
       }
 
       if (!isSpinningRef.current && Math.abs(pointerVelocityRef.current) < 0.01 && Math.abs(pointerRotationRef.current) < 0.01) {
@@ -828,17 +880,16 @@
     }, [items, onSpinEnd, playTickSound]);
 
     const startSpin = useCallback((initialVelocity) => {
-        if (isSpinningRef.current || items.length < 2) return;
-        
-        isSpinningRef.current = true;
-        settlingRef.current = false;
-        isReversingRef.current = false;
-        setIsSpinning(true);
-        velocityRef.current = initialVelocity;
-        if (!animationFrameRef.current) {
-            animationFrameRef.current = requestAnimationFrame(animate);
-        }
-    }, [animate, items.length]);
+      if (isSpinningRef.current) return;
+      isSpinningRef.current = true;
+      settlingRef.current = false;
+      isReversingRef.current = false;
+      setIsSpinning(true);
+      velocityRef.current = initialVelocity;
+      if (!animationFrameRef.current) {
+        animationFrameRef.current = requestAnimationFrame(animate);
+      }
+    }, [animate]);
 
     const handleSpin = async () => {
         if (isSpinningRef.current || items.length < 2) return;
@@ -857,50 +908,52 @@
                 const duration = 0.05;
                 const frameCount = context.sampleRate * duration;
                 const offlineContext = new OfflineAudioContext(1, frameCount, context.sampleRate);
+                
                 const oscillator = offlineContext.createOscillator();
                 const gainNode = offlineContext.createGain();
                 oscillator.connect(gainNode);
                 gainNode.connect(offlineContext.destination);
+
                 oscillator.type = 'triangle';
                 oscillator.frequency.setValueAtTime(1200, 0);
                 gainNode.gain.setValueAtTime(0.4, 0);
                 gainNode.gain.exponentialRampToValueAtTime(0.001, duration);
                 oscillator.start(0);
+                
                 tickBufferRef.current = await offlineContext.startRendering();
             } catch(e) {
                 console.error('오디오 틱 버퍼를 생성하는 데 실패했습니다:', e);
             }
         }
-
+        
         if (isBoosterMode) {
-            isSpinningRef.current = true;
             setIsSpinning(true);
+            isSpinningRef.current = true;
             
             const winnerIndex = Math.floor(Math.random() * items.length);
             const segmentAngle = 360 / items.length;
             
-            const targetAngleInWheel = winnerIndex * segmentAngle + segmentAngle / 2;
+            const targetAngleInWheel = winnerIndex * segmentAngle + (segmentAngle / 2);
             const finalRotationFromTop = 180 - targetAngleInWheel;
 
-            const currentEffectiveRotation = (rotationRef.current % 360 + 360) % 360;
             const fullSpins = 5;
-            let targetRotation = rotationRef.current - currentEffectiveRotation + (fullSpins * 360) + finalRotationFromTop;
+            const currentRevolutions = Math.floor(rotationRef.current / 360);
+            let targetRotation = (currentRevolutions + fullSpins) * 360 + finalRotationFromTop;
 
-            if (targetRotation <= rotationRef.current) {
+            if (targetRotation <= rotationRef.current + 180) {
                 targetRotation += 360;
             }
             
-            boosterAnimRef.current = {
-                active: true,
+            boosterAnimState.current = {
                 startTime: performance.now(),
                 startRotation: rotationRef.current,
                 targetRotation: targetRotation,
-                duration: 900,
+                winnerIndex: winnerIndex,
+                lastRotation: rotationRef.current,
             };
-            
-            if (!animationFrameRef.current) {
-                animationFrameRef.current = requestAnimationFrame(animate);
-            }
+
+            if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+            animationFrameRef.current = requestAnimationFrame(boosterAnimate);
         } else {
             const randomVelocity = Math.random() * 15 + 25;
             startSpin(randomVelocity);
@@ -1036,15 +1089,17 @@
         const pathData = [`M ${center},${center}`, `L ${start[0]},${start[1]}`, `A ${radius},${radius} 0 ${largeArcFlag} 1 ${end[0]},${end[1]}`, 'Z'].join(' ');
         
         const textAngle = startAngle + groupAngle / 2;
-        const textRotation = textAngle > 90 && textAngle < 270 ? textAngle - 180 : textAngle;
+        const isReversed = textAngle > 90 && textAngle < 270;
+        const textRotation = isReversed ? textAngle - 180 : textAngle;
+        const textAnchor = isReversed ? 'start' : 'end';
         
-        const textRadiusMultiplier = Math.max(1.2, 1.8 - group.count * 0.1);
-        const textX = center + (radius / textRadiusMultiplier) * Math.cos(textAngle * Math.PI / 180);
-        const textY = center + (radius / textRadiusMultiplier) * Math.sin(textAngle * Math.PI / 180);
+        const textRadius = radius - 15;
+        const textX = center + textRadius * Math.cos(textAngle * Math.PI / 180);
+        const textY = center + textRadius * Math.sin(textAngle * Math.PI / 180);
 
         const truncatedItem = group.item.length > 15 ? group.item.substring(0, 14) + '…' : group.item;
         
-        const baseFontSize = 28 - numItems * 0.5;
+        const baseFontSize = 30 - numItems * 0.5;
         const weightedFontSize = baseFontSize + (group.count - 1) * 5;
         const fontSize = Math.max(10, Math.min(50, weightedFontSize));
 
@@ -1054,7 +1109,9 @@
             x: textX, y: textY,
             transform: `rotate(${textRotation}, ${textX}, ${textY})`,
             fill: "#111827", fontSize: fontSize, fontWeight: "bold",
-            textAnchor: "middle", alignmentBaseline: "middle", className: "select-none"
+            textAnchor: textAnchor, 
+            alignmentBaseline: "middle", 
+            className: "select-none"
           }, truncatedItem)
         );
       });
