@@ -4,9 +4,10 @@ import { WHEEL_COLORS } from '../constants';
 interface WheelProps {
   items: string[];
   onSpinEnd: (winner: string) => void;
+  isBoosterMode: boolean;
 }
 
-const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
+const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd, isBoosterMode }) => {
   const [isSpinning, setIsSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
   const [pointerRotation, setPointerRotation] = useState(0);
@@ -23,7 +24,7 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
   const isReversingRef = useRef(false);
   const animationFrameRef = useRef<number | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
-  const tickBufferRef = useRef<AudioBuffer | null>(null); // 오디오 버퍼를 위한 Ref 추가
+  const tickBufferRef = useRef<AudioBuffer | null>(null);
 
   // 드래그/스와이프를 위한 Ref
   const wheelContainerRef = useRef<HTMLDivElement>(null);
@@ -31,6 +32,14 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
   const lastPointerAngleRef = useRef(0);
   const velocityHistoryRef = useRef<{ velocity: number; time: number }[]>([]);
 
+  // 부스터 모드 애니메이션 상태를 위한 Ref
+  const boosterAnimState = useRef({
+    startTime: 0,
+    startRotation: 0,
+    targetRotation: 0,
+    winnerIndex: 0,
+    lastRotation: 0,
+  });
 
   // 고유 항목에 일관되고 분산된 색상을 매핑합니다.
   const colorMap = useMemo(() => {
@@ -40,8 +49,6 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
     const numColors = WHEEL_COLORS.length;
     if (numUnique === 0) return map;
 
-    // 항목 수에 따라 색상 선택 전략을 조정합니다.
-    // 항목이 적으면 대비가 높은 색상을 선택하고, 많으면 무지개처럼 순차적인 색상을 선택합니다.
     const step = numUnique > 0 && numUnique < numColors
       ? Math.floor(numColors / numUnique)
       : 1;
@@ -60,39 +67,86 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
 
   const playTickSound = useCallback(() => {
     if ('vibrate' in navigator) {
-      navigator.vibrate(15); // 못 소리와 함께 짧은 진동
+      navigator.vibrate(15);
     }
     
     if (!audioContextRef.current || !tickBufferRef.current) return;
     const audioContext = audioContextRef.current;
     
-    // 버퍼 소스 노드를 생성하고 버퍼를 할당합니다.
     const source = audioContext.createBufferSource();
     source.buffer = tickBufferRef.current;
     source.connect(audioContext.destination);
-    source.start(); // 즉시 재생
+    source.start();
   }, []);
 
-  // 물리 기반 애니메이션 루프
-  const animate = useCallback(() => {
-    // 포인터 물리 상수
+  // 부스터 모드를 위한 감속/가속 Easing 함수
+  const easeOutQuint = (x: number): number => {
+    return 1 - Math.pow(1 - x, 5);
+  };
+
+  // 부스터 모드를 위한 새 애니메이션 루프
+  const boosterAnimate = useCallback(() => {
+    const DURATION = 900; // ms
+    const { startTime, startRotation, targetRotation, winnerIndex } = boosterAnimState.current;
+    
+    const elapsed = performance.now() - startTime;
+    const progress = Math.min(elapsed / DURATION, 1);
+    const easedProgress = easeOutQuint(progress);
+
+    const currentRotation = startRotation + (targetRotation - startRotation) * easedProgress;
+    
+    rotationRef.current = currentRotation;
+    setRotation(currentRotation);
+    
     const POINTER_STIFFNESS = 0.3;
     const POINTER_DAMPING = 0.85;
-    
-    // 포인터 회전 물리
     const restoringForce = -pointerRotationRef.current * POINTER_STIFFNESS;
     pointerVelocityRef.current += restoringForce;
     pointerVelocityRef.current *= POINTER_DAMPING;
     pointerRotationRef.current += pointerVelocityRef.current;
     setPointerRotation(pointerRotationRef.current);
 
-    // 돌림판 애니메이션
+    const segmentAngle = 360 / (items.length || 1);
+    const pointerOffset = 180.0;
+    const lastSegIdx = Math.floor((boosterAnimState.current.lastRotation - pointerOffset) / segmentAngle);
+    const currentSegIdx = Math.floor((currentRotation - pointerOffset) / segmentAngle);
+
+    if (currentSegIdx !== lastSegIdx) {
+        playTickSound();
+        const kickVelocity = 15 + Math.random() * 5;
+        if (pointerRotationRef.current > 0) pointerRotationRef.current = 0;
+        pointerVelocityRef.current = -kickVelocity;
+    }
+    boosterAnimState.current.lastRotation = currentRotation;
+
+    if (progress < 1) {
+        animationFrameRef.current = requestAnimationFrame(boosterAnimate);
+    } else {
+        animationFrameRef.current = null;
+        isSpinningRef.current = false;
+        setIsSpinning(false);
+        if (items[winnerIndex]) {
+            onSpinEnd(items[winnerIndex]);
+        }
+    }
+  }, [items, onSpinEnd, playTickSound]);
+
+  // 물리 기반 애니메이션 루프
+  const animate = useCallback(() => {
+    const POINTER_STIFFNESS = 0.3;
+    const POINTER_DAMPING = 0.85;
+    
+    const restoringForce = -pointerRotationRef.current * POINTER_STIFFNESS;
+    pointerVelocityRef.current += restoringForce;
+    pointerVelocityRef.current *= POINTER_DAMPING;
+    pointerRotationRef.current += pointerVelocityRef.current;
+    setPointerRotation(pointerRotationRef.current);
+
     if (isSpinningRef.current) {
-        // 돌림판 물리 상수
-        const HIGH_SPEED_THRESHOLD = 15.0; // 높은 마찰이 완전히 적용되는 속도
-        const LOW_SPEED_THRESHOLD = 5.0;  // 낮은 마찰이 완전히 적용되는 속도
-        const HIGH_FRICTION = 0.985;      // 높은 속도에서의 마찰력 (빠른 감속)
-        const LOW_FRICTION = 0.998;       // 낮은 속도에서의 마찰력 (느린 감속으로 긴장감 유발)
+        const HIGH_SPEED_THRESHOLD = 15.0;
+        const LOW_SPEED_THRESHOLD = 5.0;
+        const HIGH_FRICTION = 0.985;
+        const LOW_FRICTION = 0.998;
 
         const currentVelocity = Math.abs(velocityRef.current);
         let currentFriction;
@@ -102,14 +156,12 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
         } else if (currentVelocity <= LOW_SPEED_THRESHOLD) {
             currentFriction = LOW_FRICTION;
         } else {
-            // 두 임계값 사이의 속도에 대해 마찰력을 선형으로 보간하여 부드러운 전환을 만듭니다.
-            // 속도가 감소함에 따라 마찰 계수(감속률)가 점진적으로 높아져(값이 1에 가까워짐) 더 느리게 감속됩니다.
             const progress = (currentVelocity - LOW_SPEED_THRESHOLD) / (HIGH_SPEED_THRESHOLD - LOW_SPEED_THRESHOLD);
             currentFriction = LOW_FRICTION + progress * (HIGH_FRICTION - LOW_FRICTION);
         }
 
         const GRAVITY_FACTOR = 0.0012;
-        const MIN_VELOCITY_FOR_GRAVITY = 2.0; // 중력 효과 발동 속도 하향 조정
+        const MIN_VELOCITY_FOR_GRAVITY = 2.0;
         const STOP_VELOCITY = 0.005;
 
         let velocity = velocityRef.current * currentFriction;
@@ -117,10 +169,8 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
         
         if (Math.abs(velocity) < MIN_VELOCITY_FOR_GRAVITY) {
             const currentRotation = rotationRef.current + velocity;
-            
             const rotationAtPointer = currentRotation - 180.0;
             const angleInSegment = ((rotationAtPointer % segmentAngle) + segmentAngle) % segmentAngle;
-
             const distanceFromCenter = angleInSegment - (segmentAngle / 2);
             const force = -distanceFromCenter * GRAVITY_FACTOR * (MIN_VELOCITY_FOR_GRAVITY - Math.abs(velocity));
             velocity += force;
@@ -134,41 +184,33 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
         if (currentSegmentIndex !== lastSegmentIndex) {
           playTickSound();
           const kickDirection = Math.sign(velocity) || (currentSegmentIndex > lastSegmentIndex ? 1 : -1);
-
-          // 포인터 회전 물리 업데이트
           const bounceStrength = Math.abs(velocity);
           const kickVelocity = 5 + bounceStrength * 2.0;
 
-          if (kickDirection > 0) { // 돌림판이 시계 반대 방향으로 회전
-              if (pointerRotationRef.current > 0) pointerRotationRef.current = 0; // 양수 각도(오른쪽)에 있으면 리셋
-              pointerVelocityRef.current = -kickVelocity; // 왼쪽으로 튕김 (음수 각속도)
+          if (kickDirection > 0) {
+              if (pointerRotationRef.current > 0) pointerRotationRef.current = 0;
+              pointerVelocityRef.current = -kickVelocity;
           } 
-          else { // 돌림판이 시계 방향으로 회전
-              if (pointerRotationRef.current < 0) pointerRotationRef.current = 0; // 음수 각도(왼쪽)에 있으면 리셋
-              pointerVelocityRef.current = kickVelocity; // 오른쪽으로 튕김 (양수 각속도)
+          else {
+              if (pointerRotationRef.current < 0) pointerRotationRef.current = 0;
+              pointerVelocityRef.current = kickVelocity;
           }
-
-          // 돌림판에 저항 적용
-          velocity *= 0.96; // 못 저항 증가
+          velocity *= 0.96;
         }
         
-        // 역회전 감지 및 제한
         if (velocityRef.current >= 0 && velocity < 0) {
-          // 역회전 시작
           if (!isReversingRef.current) {
             isReversingRef.current = true;
-            peakRotationRef.current = rotationRef.current; // 최대 회전 위치 기록
+            peakRotationRef.current = rotationRef.current;
           }
         }
 
         if (isReversingRef.current) {
           const reversedDistance = peakRotationRef.current - (rotationRef.current + velocity);
           const limit = segmentAngle / 2;
-
           if (reversedDistance > limit) {
-            // 제한 초과. 역회전을 멈추기 위해 속도를 조정합니다.
             velocity = (peakRotationRef.current - limit) - rotationRef.current;
-            isReversingRef.current = false; // 더 이상 역회전 상태가 아님
+            isReversingRef.current = false;
           }
         }
         
@@ -177,7 +219,7 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
         }
 
         if (settlingRef.current && Math.abs(velocity) < 0.001) {
-            velocity = 0; // 최종 정지
+            velocity = 0;
             isSpinningRef.current = false;
             settlingRef.current = false;
             isReversingRef.current = false;
@@ -202,11 +244,22 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
         animationFrameRef.current = null;
         return;
     }
-
     animationFrameRef.current = requestAnimationFrame(animate);
   }, [items, onSpinEnd, playTickSound]);
 
-  const startSpin = useCallback(async (initialVelocity: number) => {
+  const startSpin = useCallback((initialVelocity: number) => {
+    if (isSpinningRef.current) return;
+    isSpinningRef.current = true;
+    settlingRef.current = false;
+    isReversingRef.current = false;
+    setIsSpinning(true);
+    velocityRef.current = initialVelocity;
+    if (!animationFrameRef.current) {
+      animationFrameRef.current = requestAnimationFrame(animate);
+    }
+  }, [animate]);
+
+  const handleSpin = async () => {
     if (isSpinningRef.current || items.length < 2) return;
 
     if (!audioContextRef.current) {
@@ -217,7 +270,6 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
         }
     }
     
-    // 성능을 위해 틱 소리를 버퍼에 미리 렌더링합니다.
     if (audioContextRef.current && !tickBufferRef.current) {
         try {
             const context = audioContextRef.current;
@@ -227,7 +279,6 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
             
             const oscillator = offlineContext.createOscillator();
             const gainNode = offlineContext.createGain();
-
             oscillator.connect(gainNode);
             gainNode.connect(offlineContext.destination);
 
@@ -243,24 +294,40 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
         }
     }
     
-    isSpinningRef.current = true;
-    settlingRef.current = false;
-    isReversingRef.current = false;
-    setIsSpinning(true);
-    
-    velocityRef.current = initialVelocity;
-    
-    if (!animationFrameRef.current) {
-      animationFrameRef.current = requestAnimationFrame(animate);
-    }
-  }, [animate, items.length]);
+    if (isBoosterMode) {
+        setIsSpinning(true);
+        isSpinningRef.current = true;
+        
+        const winnerIndex = Math.floor(Math.random() * items.length);
+        const segmentAngle = 360 / items.length;
+        
+        const targetAngleInWheel = winnerIndex * segmentAngle + (segmentAngle / 2);
+        const finalRotationFromTop = 180 - targetAngleInWheel;
 
-  const handleSpin = () => {
-    const randomVelocity = Math.random() * 15 + 25;
-    startSpin(randomVelocity);
+        const fullSpins = 5;
+        const currentRevolutions = Math.floor(rotationRef.current / 360);
+        let targetRotation = (currentRevolutions + fullSpins) * 360 + finalRotationFromTop;
+
+        if (targetRotation <= rotationRef.current + 180) {
+            targetRotation += 360;
+        }
+        
+        boosterAnimState.current = {
+            startTime: performance.now(),
+            startRotation: rotationRef.current,
+            targetRotation: targetRotation,
+            winnerIndex: winnerIndex,
+            lastRotation: rotationRef.current,
+        };
+
+        if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = requestAnimationFrame(boosterAnimate);
+    } else {
+        const randomVelocity = Math.random() * 15 + 25;
+        startSpin(randomVelocity);
+    }
   };
   
-  // --- 포인터 이벤트 기반 드래그/스와이프 로직 ---
   const getPointerPosition = useCallback((e: PointerEvent | React.PointerEvent) => {
     return { x: e.clientX, y: e.clientY };
   }, []);
@@ -311,7 +378,6 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
     if (!isDraggingRef.current) return;
     isDraggingRef.current = false;
     
-    // 포인터 캡처를 해제합니다.
     if (wheelContainerRef.current) {
       (wheelContainerRef.current as HTMLElement).releasePointerCapture(e.pointerId);
     }
@@ -341,7 +407,6 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
     lastPointerAngleRef.current = currentPointerAngle;
     velocityHistoryRef.current = [{ velocity: 0, time: performance.now() }];
     
-    // 후속 이벤트를 캡처하도록 포인터를 설정합니다.
     if (wheelContainerRef.current) {
       (wheelContainerRef.current as HTMLElement).setPointerCapture(e.pointerId);
     }
@@ -355,12 +420,10 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
-      // 컴포넌트 언마운트 시 포인터 이벤트 리스너를 정리합니다.
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
     };
   }, [handlePointerMove, handlePointerUp]);
-
 
   const getCoordinatesForPercent = (percent: number): [number, number] => {
     const x = center + radius * Math.cos(2 * Math.PI * percent);
@@ -373,21 +436,13 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
 
     const groupedItems: { item: string; count: number; startIndex: number }[] = [];
     if (items.length > 0) {
-      let currentGroup = {
-        item: items[0],
-        count: 1,
-        startIndex: 0
-      };
+      let currentGroup = { item: items[0], count: 1, startIndex: 0 };
       for (let i = 1; i < items.length; i++) {
         if (items[i] === currentGroup.item) {
           currentGroup.count++;
         } else {
           groupedItems.push(currentGroup);
-          currentGroup = {
-            item: items[i],
-            count: 1,
-            startIndex: i
-          };
+          currentGroup = { item: items[i], count: 1, startIndex: i };
         }
       }
       groupedItems.push(currentGroup);
@@ -402,15 +457,8 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
       
       const start = getCoordinatesForPercent(startAngle / 360);
       const end = getCoordinatesForPercent(endAngle / 360);
-
       const largeArcFlag = groupAngle > 180 ? 1 : 0;
-
-      const pathData = [
-        `M ${center},${center}`,
-        `L ${start[0]},${start[1]}`,
-        `A ${radius},${radius} 0 ${largeArcFlag} 1 ${end[0]},${end[1]}`,
-        'Z'
-      ].join(' ');
+      const pathData = [`M ${center},${center}`,`L ${start[0]},${start[1]}`,`A ${radius},${radius} 0 ${largeArcFlag} 1 ${end[0]},${end[1]}`,'Z'].join(' ');
       
       const textAngle = startAngle + groupAngle / 2;
       const textRotation = textAngle > 90 && textAngle < 270 ? textAngle - 180 : textAngle;
@@ -446,17 +494,17 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
         ref={wheelContainerRef}
         className="relative w-full aspect-square flex items-center justify-center cursor-grab active:cursor-grabbing select-none"
         onPointerDown={handlePointerDown}
-        style={{ touchAction: 'none' }} // 모바일에서 스크롤 방지
+        style={{ touchAction: 'none' }}
     >
         <div 
             className="absolute left-1/2 z-20"
             style={{ 
                 width: '8%', 
                 height: '12%', 
-                top: '-11%', // 겹침 방지를 위해 포인터를 약간 위로 이동
+                top: '-11%',
                 transform: `translateX(-50%) rotate(${pointerRotation}deg)`,
-                transformOrigin: '50% 33.33%', // 원의 중심(y=20)에 맞춘 회전 중심
-                filter: 'drop-shadow(0 2px 3px rgba(0, 0, 0, 0.4))' // 그림자 효과 추가
+                transformOrigin: '50% 33.33%',
+                filter: 'drop-shadow(0 2px 3px rgba(0, 0, 0, 0.4))'
             }}
         >
              <svg width="100%" height="100%" viewBox="0 0 40 60" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -472,11 +520,10 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd }) => {
         <g 
           style={{
             transform: `rotate(${rotation}deg)`,
-            transformOrigin: 'center'
+            transformOrigin: 'center',
           }}
         >
           {renderSegments()}
-          {/* 페그(못) 렌더링 */}
           {numItems > 0 && items.map((_, index) => {
               const angleDeg = (360 / numItems) * index;
               const [x, y] = getCoordinatesForPercent(angleDeg / 360);

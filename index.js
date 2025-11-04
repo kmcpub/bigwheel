@@ -363,7 +363,7 @@
   };
 
 
-  const Controls = ({ initialItems, onItemsChange, onShuffle, presets, setPresets, selectedPresetId, setSelectedPresetId, expandedHeight, collapsedVisibleHeight }) => {
+  const Controls = ({ initialItems, onItemsChange, onShuffle, presets, setPresets, selectedPresetId, setSelectedPresetId, expandedHeight, collapsedVisibleHeight, isBoosterMode, onBoosterModeChange }) => {
     const [text, setText] = useState(initialItems.join('\n'));
     const isComposingRef = useRef(false);
     const [isExpanded, setIsExpanded] = useState(false);
@@ -526,18 +526,35 @@
         }),
         createElement("p", { className: "text-sm text-gray-500 mt-1" }, `${initialItems.length} 개 항목`)
       ),
-      createElement("div", { className: "mt-4 pt-4 flex flex-col gap-3" },
-        createElement("div", { className: "flex gap-3" },
-          createElement("button", { onClick: onShuffle, className: "w-full bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-4 rounded-md shadow-md transform transition-all duration-300 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-teal-300" }, "순서 섞기"),
-          createElement("button", {
-            onClick: () => {
-              onItemsChange([]);
-              setSelectedPresetId(null);
-            },
-            className: "w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md shadow-md transform transition-all duration-300 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-red-300"
-          }, "전체 삭제")
+        createElement("div", { className: "mt-4 pt-4 border-t border-slate-700 flex flex-col gap-4" },
+            createElement("div", { className: "flex justify-between items-center" },
+                createElement("label", { htmlFor: "booster-mode", className: "font-semibold text-gray-300 cursor-pointer" },
+                    "부스터 모드",
+                    createElement("p", { className: "text-sm text-gray-500 font-normal" }, "결과를 즉시 확인합니다.")
+                ),
+                createElement("button", {
+                    id: "booster-mode",
+                    role: "switch",
+                    "aria-checked": isBoosterMode,
+                    onClick: () => onBoosterModeChange(prev => !prev),
+                    className: `relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-cyan-500 ${isBoosterMode ? 'bg-cyan-500' : 'bg-slate-600'}`
+                },
+                    createElement("span", {
+                        className: `inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isBoosterMode ? 'translate-x-6' : 'translate-x-1'}`
+                    })
+                )
+            ),
+            createElement("div", { className: "flex gap-3" },
+                createElement("button", { onClick: onShuffle, className: "w-full bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-4 rounded-md shadow-md transform transition-all duration-300 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-teal-300" }, "순서 섞기"),
+                createElement("button", {
+                    onClick: () => {
+                        onItemsChange([]);
+                        setSelectedPresetId(null);
+                    },
+                    className: "w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md shadow-md transform transition-all duration-300 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-red-300"
+                }, "전체 삭제")
+            )
         )
-      )
     );
 
     const containerStyle = {};
@@ -578,7 +595,7 @@
   };
   
   // --- START OF components/Wheel.tsx ---
-  const Wheel = ({ items, onSpinEnd }) => {
+  const Wheel = ({ items, onSpinEnd, isBoosterMode }) => {
     const [isSpinning, setIsSpinning] = useState(false);
     const [rotation, setRotation] = useState(0);
     const [pointerRotation, setPointerRotation] = useState(0);
@@ -600,6 +617,14 @@
     const isDraggingRef = useRef(false);
     const lastPointerAngleRef = useRef(0);
     const velocityHistoryRef = useRef([]);
+
+    const boosterAnimState = useRef({
+      startTime: 0,
+      startRotation: 0,
+      targetRotation: 0,
+      winnerIndex: 0,
+      lastRotation: 0,
+    });
 
     const colorMap = useMemo(() => {
       const map = new Map();
@@ -626,7 +651,7 @@
 
     const playTickSound = useCallback(() => {
         if ('vibrate' in navigator) {
-            navigator.vibrate(15); // 못 소리와 함께 짧은 진동
+            navigator.vibrate(15);
         }
         if (!audioContextRef.current || !tickBufferRef.current) return;
         const audioContext = audioContextRef.current;
@@ -635,6 +660,54 @@
         source.connect(audioContext.destination);
         source.start();
     }, []);
+
+    const easeOutQuint = (x) => 1 - Math.pow(1 - x, 5);
+
+    const boosterAnimate = useCallback(() => {
+      const DURATION = 900;
+      const { startTime, startRotation, targetRotation, winnerIndex } = boosterAnimState.current;
+      
+      const elapsed = performance.now() - startTime;
+      const progress = Math.min(elapsed / DURATION, 1);
+      const easedProgress = easeOutQuint(progress);
+
+      const currentRotation = startRotation + (targetRotation - startRotation) * easedProgress;
+      
+      rotationRef.current = currentRotation;
+      setRotation(currentRotation);
+      
+      const POINTER_STIFFNESS = 0.3;
+      const POINTER_DAMPING = 0.85;
+      const restoringForce = -pointerRotationRef.current * POINTER_STIFFNESS;
+      pointerVelocityRef.current += restoringForce;
+      pointerVelocityRef.current *= POINTER_DAMPING;
+      pointerRotationRef.current += pointerVelocityRef.current;
+      setPointerRotation(pointerRotationRef.current);
+
+      const segmentAngle = 360 / (items.length || 1);
+      const pointerOffset = 180.0;
+      const lastSegIdx = Math.floor((boosterAnimState.current.lastRotation - pointerOffset) / segmentAngle);
+      const currentSegIdx = Math.floor((currentRotation - pointerOffset) / segmentAngle);
+
+      if (currentSegIdx !== lastSegIdx) {
+          playTickSound();
+          const kickVelocity = 15 + Math.random() * 5;
+          if (pointerRotationRef.current > 0) pointerRotationRef.current = 0;
+          pointerVelocityRef.current = -kickVelocity;
+      }
+      boosterAnimState.current.lastRotation = currentRotation;
+
+      if (progress < 1) {
+          animationFrameRef.current = requestAnimationFrame(boosterAnimate);
+      } else {
+          animationFrameRef.current = null;
+          isSpinningRef.current = false;
+          setIsSpinning(false);
+          if (items[winnerIndex]) {
+              onSpinEnd(items[winnerIndex]);
+          }
+      }
+    }, [items, onSpinEnd, playTickSound]);
 
     const animate = useCallback(() => {
       const POINTER_STIFFNESS = 0.3;
@@ -746,8 +819,21 @@
       animationFrameRef.current = requestAnimationFrame(animate);
     }, [items, onSpinEnd, playTickSound]);
 
-    const startSpin = useCallback(async (initialVelocity) => {
+    const startSpin = useCallback((initialVelocity) => {
+      if (isSpinningRef.current) return;
+      isSpinningRef.current = true;
+      settlingRef.current = false;
+      isReversingRef.current = false;
+      setIsSpinning(true);
+      velocityRef.current = initialVelocity;
+      if (!animationFrameRef.current) {
+        animationFrameRef.current = requestAnimationFrame(animate);
+      }
+    }, [animate]);
+
+    const handleSpin = async () => {
         if (isSpinningRef.current || items.length < 2) return;
+
         if (!audioContextRef.current) {
             try {
                 audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
@@ -755,39 +841,63 @@
                 console.error("Web Audio API is not supported in this browser.");
             }
         }
+        
         if (audioContextRef.current && !tickBufferRef.current) {
             try {
                 const context = audioContextRef.current;
                 const duration = 0.05;
                 const frameCount = context.sampleRate * duration;
                 const offlineContext = new OfflineAudioContext(1, frameCount, context.sampleRate);
+                
                 const oscillator = offlineContext.createOscillator();
                 const gainNode = offlineContext.createGain();
                 oscillator.connect(gainNode);
                 gainNode.connect(offlineContext.destination);
+
                 oscillator.type = 'triangle';
                 oscillator.frequency.setValueAtTime(1200, 0);
                 gainNode.gain.setValueAtTime(0.4, 0);
                 gainNode.gain.exponentialRampToValueAtTime(0.001, duration);
                 oscillator.start(0);
+                
                 tickBufferRef.current = await offlineContext.startRendering();
-            } catch (e) {
+            } catch(e) {
                 console.error('오디오 틱 버퍼를 생성하는 데 실패했습니다:', e);
             }
         }
-        isSpinningRef.current = true;
-        settlingRef.current = false;
-        isReversingRef.current = false;
-        setIsSpinning(true);
-        velocityRef.current = initialVelocity;
-        if (!animationFrameRef.current) {
-            animationFrameRef.current = requestAnimationFrame(animate);
-        }
-    }, [animate, items.length]);
+        
+        if (isBoosterMode) {
+            setIsSpinning(true);
+            isSpinningRef.current = true;
+            
+            const winnerIndex = Math.floor(Math.random() * items.length);
+            const segmentAngle = 360 / items.length;
+            
+            const targetAngleInWheel = winnerIndex * segmentAngle + (segmentAngle / 2);
+            const finalRotationFromTop = 180 - targetAngleInWheel;
 
-    const handleSpin = () => {
-        const randomVelocity = Math.random() * 15 + 25;
-        startSpin(randomVelocity);
+            const fullSpins = 5;
+            const currentRevolutions = Math.floor(rotationRef.current / 360);
+            let targetRotation = (currentRevolutions + fullSpins) * 360 + finalRotationFromTop;
+
+            if (targetRotation <= rotationRef.current + 180) {
+                targetRotation += 360;
+            }
+            
+            boosterAnimState.current = {
+                startTime: performance.now(),
+                startRotation: rotationRef.current,
+                targetRotation: targetRotation,
+                winnerIndex: winnerIndex,
+                lastRotation: rotationRef.current,
+            };
+
+            if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+            animationFrameRef.current = requestAnimationFrame(boosterAnimate);
+        } else {
+            const randomVelocity = Math.random() * 15 + 25;
+            startSpin(randomVelocity);
+        }
     };
 
     const getPointerPosition = useCallback((e) => {
@@ -1087,6 +1197,7 @@
     const wheelContainerRef = useRef(null);
     const [collapsedVisibleHeight, setCollapsedVisibleHeight] = useState(128);
     const [isMuted, setIsMuted] = useState(true);
+    const [isBoosterMode, setIsBoosterMode] = useState(false);
     const audioContextRef = useRef(null);
     const bgmBufferRef = useRef(null);
     const bgmSourceRef = useRef(null);
@@ -1359,7 +1470,7 @@
         ),
         createElement("main", { className: "w-full max-w-7xl flex-grow flex flex-col lg:flex-row gap-8 items-stretch min-h-0" },
           createElement("div", { ref: wheelContainerRef, className: "w-full lg:w-2/3 flex items-center justify-center" },
-            createElement(Wheel, { items: wheelItems, onSpinEnd: handleSpinEnd })
+            createElement(Wheel, { items: wheelItems, onSpinEnd: handleSpinEnd, isBoosterMode: isBoosterMode })
           ),
           createElement("div", { className: "w-full lg:w-1/3 flex flex-col min-h-0 flex-grow" },
             createElement(Controls, {
@@ -1372,6 +1483,8 @@
               setSelectedPresetId: setSelectedPresetId,
               expandedHeight: "85dvh",
               collapsedVisibleHeight: collapsedVisibleHeight,
+              isBoosterMode: isBoosterMode,
+              onBoosterModeChange: setIsBoosterMode,
             })
           )
         ),

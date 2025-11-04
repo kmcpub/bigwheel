@@ -125,6 +125,7 @@ const App: React.FC = () => {
   const wheelContainerRef = useRef<HTMLDivElement>(null);
   const [collapsedVisibleHeight, setCollapsedVisibleHeight] = useState(128);
   const [isMuted, setIsMuted] = useState(true);
+  const [isBoosterMode, setIsBoosterMode] = useState(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const bgmBufferRef = useRef<AudioBuffer | null>(null);
   const bgmSourceRef = useRef<AudioBufferSourceNode | null>(null);
@@ -443,7 +444,7 @@ const App: React.FC = () => {
 
         <main className="w-full max-w-7xl flex-grow flex flex-col lg:flex-row gap-8 items-stretch min-h-0">
           <div ref={wheelContainerRef} className="w-full lg:w-2/3 flex items-center justify-center">
-            <Wheel items={wheelItems} onSpinEnd={handleSpinEnd} />
+            <Wheel items={wheelItems} onSpinEnd={handleSpinEnd} isBoosterMode={isBoosterMode} />
           </div>
           <div className="w-full lg:w-1/3 flex flex-col min-h-0 flex-grow">
             <Controls
@@ -456,6 +457,8 @@ const App: React.FC = () => {
               setSelectedPresetId={setSelectedPresetId}
               expandedHeight="85dvh"
               collapsedVisibleHeight={collapsedVisibleHeight}
+              isBoosterMode={isBoosterMode}
+              onBoosterModeChange={setIsBoosterMode}
             />
           </div>
         </main>

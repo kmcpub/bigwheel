@@ -11,6 +11,8 @@ interface ControlsProps {
   setSelectedPresetId: (id: string | null) => void;
   expandedHeight: string;
   collapsedVisibleHeight: number;
+  isBoosterMode: boolean;
+  onBoosterModeChange: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 interface EditablePresetButtonProps {
@@ -94,7 +96,7 @@ const EditablePresetButton: React.FC<EditablePresetButtonProps> = ({ preset, isS
 };
 
 
-const Controls: React.FC<ControlsProps> = ({ initialItems, onItemsChange, onShuffle, presets, setPresets, selectedPresetId, setSelectedPresetId, expandedHeight, collapsedVisibleHeight }) => {
+const Controls: React.FC<ControlsProps> = ({ initialItems, onItemsChange, onShuffle, presets, setPresets, selectedPresetId, setSelectedPresetId, expandedHeight, collapsedVisibleHeight, isBoosterMode, onBoosterModeChange }) => {
   const [text, setText] = useState(initialItems.join('\n'));
   const isComposingRef = useRef(false);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -267,7 +269,28 @@ const Controls: React.FC<ControlsProps> = ({ initialItems, onItemsChange, onShuf
         <p className="text-sm text-gray-500 mt-1">{initialItems.length} 개 항목</p>
       </div>
 
-      <div className="mt-4 pt-4 flex flex-col gap-3">
+      <div className="mt-4 pt-4 border-t border-slate-700 flex flex-col gap-4">
+        <div className="flex justify-between items-center">
+            <label htmlFor="booster-mode" className="font-semibold text-gray-300 cursor-pointer">
+                부스터 모드
+                <p className="text-sm text-gray-500 font-normal">결과를 즉시 확인합니다.</p>
+            </label>
+            <button
+                id="booster-mode"
+                role="switch"
+                aria-checked={isBoosterMode}
+                onClick={() => onBoosterModeChange(prev => !prev)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-cyan-500 ${
+                    isBoosterMode ? 'bg-cyan-500' : 'bg-slate-600'
+                }`}
+            >
+                <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        isBoosterMode ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                />
+            </button>
+        </div>
         <div className="flex gap-3">
           <button onClick={onShuffle} className="w-full bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-4 rounded-md shadow-md transform transition-all duration-300 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-teal-300">순서 섞기</button>
           <button
