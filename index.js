@@ -139,7 +139,6 @@
         type1 = 'sawtooth',
         type2 = 'square'
       ) => {
-        // Layering oscillators for a richer, brassy tone
         const osc1 = audioContext.createOscillator();
         const osc2 = audioContext.createOscillator();
         const gainNode = audioContext.createGain();
@@ -152,14 +151,12 @@
         osc2.type = type2;
 
         osc1.frequency.setValueAtTime(frequency, startTime);
-        // Slightly detune the second oscillator for a chorus effect
         osc2.frequency.setValueAtTime(frequency * 1.005, startTime);
 
-        // ADSR-like envelope for a punchier sound
         gainNode.gain.setValueAtTime(0, startTime);
-        gainNode.gain.linearRampToValueAtTime(volume, startTime + 0.02); // Fast attack
-        gainNode.gain.exponentialRampToValueAtTime(volume * 0.7, startTime + 0.1); // Decay
-        gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + duration); // Release
+        gainNode.gain.linearRampToValueAtTime(volume, startTime + 0.02);
+        gainNode.gain.exponentialRampToValueAtTime(volume * 0.7, startTime + 0.1);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
 
         osc1.start(startTime);
         osc1.stop(startTime + duration);
@@ -168,7 +165,6 @@
       };
 
       const now = audioContext.currentTime;
-      // Frequencies for a C major scale
       const C4 = 261.63;
       const G4 = 392.00;
       const C5 = 523.25;
@@ -178,15 +174,13 @@
       const short = 0.15;
       const long = 1.0;
 
-      // Phrase 1: Quick ascending arpeggio
       playNote(C4, now, short, 0.3);
       playNote(G4, now + short, short, 0.3);
       
-      // Phrase 2: The final, rich C-major chord
       const chordTime = now + short * 2;
-      playNote(C5, chordTime, long, 0.4);  // Root
-      playNote(E5, chordTime, long, 0.32); // Major third
-      playNote(G5, chordTime, long, 0.25); // Perfect fifth
+      playNote(C5, chordTime, long, 0.4);
+      playNote(E5, chordTime, long, 0.32);
+      playNote(G5, chordTime, long, 0.25);
     }, []);
 
     const handleConfettiAnimationEnd = useCallback((id) => {
@@ -197,13 +191,10 @@
       let interval = null;
       if (winner) {
         setIsVisible(true);
-        
-        // 당첨 시 진동 효과
         if ('vibrate' in navigator) {
-            navigator.vibrate([100, 50, 100, 50, 300]); // 짧은 진동 두 번, 긴 진동 한 번
+            navigator.vibrate([100, 50, 100, 50, 300]);
         }
         
-        // 팡파레 생성 및 재생
         try {
           if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
             audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
@@ -235,7 +226,6 @@
         interval = setInterval(addConfetti, 100);
       } else {
         setIsVisible(false);
-        // 모달이 닫힐 때 오디오 컨텍스트 정리
         if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
             audioContextRef.current.close().then(() => {
                 audioContextRef.current = null;
@@ -1158,7 +1148,7 @@
     );
   };
   
-  // --- EditableText Component ---
+  // --- START OF App.tsx ---
   const EditableText = ({ initialValue, onSave, className, as: Component, ariaLabel }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [value, setValue] = useState(initialValue);
@@ -1193,12 +1183,6 @@
         setIsEditing(false);
       }
     };
-    
-    const handleClick = () => {
-      if (!isEditing) {
-        setIsEditing(true);
-      }
-    };
 
     if (isEditing) {
       return createElement("input", {
@@ -1209,22 +1193,21 @@
         onBlur: handleSave,
         onKeyDown: handleKeyDown,
         className: `${className} bg-transparent border-b-2 border-cyan-400 outline-none w-full text-center`,
-        "aria-label": ariaLabel,
+        "aria-label": ariaLabel
       });
     }
 
     return createElement(Component, {
       className: `${className} cursor-pointer hover:bg-slate-700/50 rounded-md px-2 transition-colors`,
-      onClick: handleClick,
-      title: "클릭하여 수정",
+      onClick: () => setIsEditing(true),
+      title: "클릭하여 수정"
     }, value || initialValue);
   };
-  
-  // --- START OF App.tsx ---
+
   const App = () => {
     const [title, setTitle] = useState(() => localStorage.getItem('spinningWheelTitle') || '돌려돌려~ 돌림판!');
     const [subtitle, setSubtitle] = useState(() => localStorage.getItem('spinningWheelSubtitle') || 'Made by KMC');
-
+    
     const [presets, setPresets] = useState(() => {
       try {
         const savedPresets = localStorage.getItem('spinningWheelPresets');
@@ -1253,7 +1236,7 @@
       }
       return DEFAULT_PRESETS[0].items;
     });
-
+    
     const [winner, setWinner] = useState(null);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [screens, setScreens] = useState([]);
@@ -1273,6 +1256,7 @@
         const noteDuration16th = beatDuration / 4;
         const totalBars = 16;
         const totalDuration = totalBars * 4 * beatDuration;
+
         const offlineCtx = new OfflineAudioContext(2, Math.ceil(audioContext.sampleRate * totalDuration), audioContext.sampleRate);
 
         const playNote = (oscType, freq, time, duration, volume, adsr) => {
@@ -1282,52 +1266,61 @@
             const gain = offlineCtx.createGain();
             osc.connect(gain);
             gain.connect(offlineCtx.destination);
+
             osc.frequency.setValueAtTime(freq, time);
             gain.gain.setValueAtTime(0, time);
             gain.gain.linearRampToValueAtTime(volume * adsr.sustain, time + adsr.attack);
             gain.gain.exponentialRampToValueAtTime(volume, time + adsr.attack + adsr.decay);
             gain.gain.linearRampToValueAtTime(0, time + duration);
+
             osc.start(time);
             osc.stop(time + duration);
         };
+        
         const playDrum = (type, time) => {
-            if (type === 'kick') {
-                const osc = offlineCtx.createOscillator();
-                const gain = offlineCtx.createGain();
-                osc.connect(gain);
-                gain.connect(offlineCtx.destination);
-                osc.frequency.setValueAtTime(150, time);
-                osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.1);
-                gain.gain.setValueAtTime(0.5, time);
-                gain.gain.exponentialRampToValueAtTime(0.01, time + 0.1);
-                osc.start(time);
-                osc.stop(time + 0.1);
-            } else {
-                const noise = offlineCtx.createBufferSource();
-                const bufferSize = offlineCtx.sampleRate * 0.1;
-                const buffer = offlineCtx.createBuffer(1, bufferSize, offlineCtx.sampleRate);
-                const data = buffer.getChannelData(0);
-                for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
-                noise.buffer = buffer;
-                const filter = offlineCtx.createBiquadFilter();
-                filter.type = 'highpass';
-                filter.frequency.value = 1500;
-                const gain = offlineCtx.createGain();
-                gain.gain.setValueAtTime(0.4, time);
-                gain.gain.exponentialRampToValueAtTime(0.01, time + 0.08);
-                noise.connect(filter).connect(gain).connect(offlineCtx.destination);
-                noise.start(time);
-                noise.stop(time + 0.08);
-            }
+          if (type === 'kick') {
+              const osc = offlineCtx.createOscillator();
+              const gain = offlineCtx.createGain();
+              osc.connect(gain);
+              gain.connect(offlineCtx.destination);
+              osc.frequency.setValueAtTime(150, time);
+              osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.1);
+              gain.gain.setValueAtTime(0.5, time);
+              gain.gain.exponentialRampToValueAtTime(0.01, time + 0.1);
+              osc.start(time);
+              osc.stop(time + 0.1);
+          } else { 
+              const noise = offlineCtx.createBufferSource();
+              const bufferSize = offlineCtx.sampleRate * 0.1;
+              const buffer = offlineCtx.createBuffer(1, bufferSize, offlineCtx.sampleRate);
+              const data = buffer.getChannelData(0);
+              for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+              noise.buffer = buffer;
+              const filter = offlineCtx.createBiquadFilter();
+              filter.type = 'highpass';
+              filter.frequency.value = 1500;
+              const gain = offlineCtx.createGain();
+              gain.gain.setValueAtTime(0.4, time);
+              gain.gain.exponentialRampToValueAtTime(0.01, time + 0.08);
+              noise.connect(filter).connect(gain).connect(offlineCtx.destination);
+              noise.start(time);
+              noise.stop(time + 0.08);
+          }
         };
-        const n = { C3: 130.81, F3: 174.61, G3: 196.00, G4: 392.00, A4: 440.00, C5: 523.25, D5: 587.33, E5: 659.25, F5: 698.46, G5: 783.99 };
-        const melody = [n.C5, n.E5, n.G4, n.E5, null, n.C5, null, n.E5, n.G5, n.F5, n.E5, n.D5, n.C5, null, null, null, n.D5, n.F5, n.A4, n.F5, null, n.D5, null, n.F5, n.A4, n.G4, n.F5, n.E5, n.D5, null, null, null];
-        const bassline = [n.C3, null, n.C3, null, n.C3, null, null, null, n.F3, null, n.F3, null, n.F3, null, null, null, n.G3, null, n.G3, null, n.G3, null, null, null, n.C3, null, n.C3, null, n.G3, null, null, null];
-        for (let bar = 0; bar < totalBars; bar++) {
+
+        const n = {
+            C3: 130.81, F3: 174.61, G3: 196.00,
+            G4: 392.00, A4: 440.00, C5: 523.25, D5: 587.33, E5: 659.25, F5: 698.46, G5: 783.99
+        };
+        const melody = [ n.C5, n.E5, n.G4, n.E5, null, n.C5, null, n.E5, n.G5, n.F5, n.E5, n.D5, n.C5, null, null, null, n.D5, n.F5, n.A4, n.F5, null, n.D5, null, n.F5, n.A4, n.G4, n.F5, n.E5, n.D5, null, null, null];
+        const bassline = [n.C3, null, n.C3, null, n.C3, null, null, null, n.F3, null, n.F3, null, n.F3, null, null, null, n.G3, null, n.G3, null, n.G3, null, null, null, n.C3, null, n.C3, null, n.G3, null, null, null,];
+
+        for (let bar = 0; bar < 16; bar++) {
             for (let beat = 0; beat < 4; beat++) {
                 const time = (bar * 4 + beat) * beatDuration;
                 playDrum('kick', time);
                 if (beat % 2 === 1) playDrum('snare', time);
+                
                 for (let i = 0; i < 4; i++) {
                     const step = beat * 4 + i;
                     const noteTime = time + i * noteDuration16th;
@@ -1341,68 +1334,67 @@
     }, []);
 
     useEffect(() => {
-        const playBgm = async () => {
-            if (!audioContextRef.current) {
-                try {
-                    audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-                } catch (e) {
-                    console.error("Web Audio API가 이 브라우저에서 지원되지 않습니다."); return;
-                }
-            }
-            const audioContext = audioContextRef.current;
-            if (audioContext.state === 'suspended') await audioContext.resume();
-            if (!bgmBufferRef.current && !isGeneratingBgmRef.current) {
-                isGeneratingBgmRef.current = true;
-                try {
-                    bgmBufferRef.current = await createBgm(audioContext);
-                } catch (e) { console.error("BGM 생성 실패", e); } 
-                finally { isGeneratingBgmRef.current = false; }
-            }
-            if (bgmBufferRef.current && bgmSourceRef.current === null) {
-                const source = audioContext.createBufferSource();
-                source.buffer = bgmBufferRef.current;
-                source.loop = true;
-                source.connect(audioContext.destination);
-                source.start(0);
-                bgmSourceRef.current = source;
-            }
-        };
-        const stopBgm = () => {
-            if (bgmSourceRef.current) {
-                bgmSourceRef.current.stop();
-                bgmSourceRef.current.disconnect();
-                bgmSourceRef.current = null;
-            }
-        };
-        if (!isMuted) playBgm();
-        else stopBgm();
-        return () => { stopBgm(); };
+      const playBgm = async () => {
+          if (!audioContextRef.current) {
+              try {
+                  audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+              } catch (e) {
+                  console.error("Web Audio API가 이 브라우저에서 지원되지 않습니다."); return;
+              }
+          }
+          const audioContext = audioContextRef.current;
+          if (audioContext.state === 'suspended') await audioContext.resume();
+
+          if (!bgmBufferRef.current && !isGeneratingBgmRef.current) {
+              isGeneratingBgmRef.current = true;
+              try {
+                  bgmBufferRef.current = await createBgm(audioContext);
+              } catch (e) { console.error("BGM 생성 실패", e); } 
+              finally { isGeneratingBgmRef.current = false; }
+          }
+
+          if (bgmBufferRef.current && bgmSourceRef.current === null) {
+              const source = audioContext.createBufferSource();
+              source.buffer = bgmBufferRef.current;
+              source.loop = true;
+              source.connect(audioContext.destination);
+              source.start(0);
+              bgmSourceRef.current = source;
+          }
+      };
+      const stopBgm = () => {
+          if (bgmSourceRef.current) {
+              bgmSourceRef.current.stop();
+              bgmSourceRef.current.disconnect();
+              bgmSourceRef.current = null;
+          }
+      };
+      if (!isMuted) playBgm();
+      else stopBgm();
+      return () => { stopBgm(); };
     }, [isMuted, createBgm]);
 
     const toggleMute = () => setIsMuted(m => !m);
-    
+
     useEffect(() => {
-        const calculateHeight = () => {
-            if (wheelContainerRef.current && window.innerWidth < 1024) {
-                const rect = wheelContainerRef.current.getBoundingClientRect();
-                const margin = 16; // 1rem gap from wheel
-                const height = window.innerHeight - rect.bottom - margin;
-                
-                // Set a minimum height for the visible part of the collapsed controls.
-                setCollapsedVisibleHeight(Math.max(128, height));
-            } else {
-                setCollapsedVisibleHeight(128); // Reset to default for desktop
-            }
-        };
+      const calculateHeight = () => {
+          if (wheelContainerRef.current && window.innerWidth < 1024) {
+              const rect = wheelContainerRef.current.getBoundingClientRect();
+              const margin = 16;
+              const height = window.innerHeight - rect.bottom - margin;
+              setCollapsedVisibleHeight(Math.max(128, height));
+          } else {
+              setCollapsedVisibleHeight(128);
+          }
+      };
 
-        window.addEventListener('resize', calculateHeight);
-        // Initial calculation after a short delay to allow layout to settle.
-        const timeoutId = setTimeout(calculateHeight, 100);
+      window.addEventListener('resize', calculateHeight);
+      const timeoutId = setTimeout(calculateHeight, 100);
 
-        return () => {
-            window.removeEventListener('resize', calculateHeight);
-            clearTimeout(timeoutId);
-        };
+      return () => {
+          window.removeEventListener('resize', calculateHeight);
+          clearTimeout(timeoutId);
+      };
     }, []);
 
     useEffect(() => {
@@ -1412,13 +1404,13 @@
       document.addEventListener('fullscreenchange', handleFullscreenChange);
       return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
     }, []);
-    
+
     useEffect(() => {
-        localStorage.setItem('spinningWheelTitle', title);
+      localStorage.setItem('spinningWheelTitle', title);
     }, [title]);
 
     useEffect(() => {
-        localStorage.setItem('spinningWheelSubtitle', subtitle);
+      localStorage.setItem('spinningWheelSubtitle', subtitle);
     }, [subtitle]);
 
     useEffect(() => {
@@ -1428,7 +1420,7 @@
         console.error("아이템을 저장하는 데 실패했습니다:", error);
       }
     }, [items]);
-
+    
     useEffect(() => {
       try {
         localStorage.setItem('spinningWheelPresets', JSON.stringify(presets));
@@ -1439,11 +1431,13 @@
 
     const wheelItems = useMemo(() => {
       if (items.length === 0) {
-        return [];
+          return [];
       }
+
       const expandedItems = items.flatMap(itemStr => {
         const trimmedItemStr = itemStr.trim();
         if (!trimmedItemStr) return [];
+
         const match = trimmedItemStr.match(/^(.*)\*(\d+)$/);
         if (match) {
           const text = match[1].trim();
@@ -1455,30 +1449,64 @@
         }
         return [trimmedItemStr];
       });
+
       if (expandedItems.length === 0) {
-        return [];
+          return [];
       }
+      
       if (expandedItems.length > 0 && expandedItems.length < 16) {
-        const multiplier = Math.ceil(16 / expandedItems.length);
-        return Array.from({ length: multiplier }, () => expandedItems).flat();
+          const multiplier = Math.ceil(16 / expandedItems.length);
+          return Array.from({ length: multiplier }, () => expandedItems).flat();
       }
       return expandedItems;
     }, [items]);
 
-    const handleItemsChange = useCallback((newItems) => { setItems(newItems); }, []);
-    const handleShuffle = useCallback(() => { setItems(prevItems => [...prevItems].sort(() => Math.random() - 0.5)); }, []);
-    const handleSpinEnd = useCallback((selectedItem) => { setWinner(selectedItem); }, []);
-    const handleCloseModal = useCallback(() => { setWinner(null); }, []);
+    const handleItemsChange = useCallback((newItems) => {
+      setItems(newItems);
+    }, []);
+    
+    const handleShuffle = useCallback(() => {
+      setItems(prevItems => [...prevItems].sort(() => Math.random() - 0.5));
+    }, []);
+
+    const handleSpinEnd = useCallback((selectedItem) => {
+      setWinner(selectedItem);
+    }, []);
+
+    const handleCloseModal = useCallback(() => {
+      setWinner(null);
+    }, []);
 
     const handleDeleteWinner = useCallback((winnerToDelete) => {
-      setItems(prevItems => prevItems.filter(itemStr => {
-        const trimmedItemStr = itemStr.trim();
-        if (!trimmedItemStr) return false;
-        const match = trimmedItemStr.match(/^(.*)\*(\d+)$/);
-        const text = match ? match[1].trim() : trimmedItemStr;
-        if (!text) return false;
-        return text !== winnerToDelete;
-      }));
+      setItems(prevItems => {
+        const index = prevItems.findIndex(itemStr => {
+          const trimmedItemStr = itemStr.trim();
+          if (!trimmedItemStr) return false;
+          
+          const match = trimmedItemStr.match(/^(.*)\*(\d+)$/);
+          const itemName = match ? match[1].trim() : trimmedItemStr;
+          return itemName === winnerToDelete;
+        });
+
+        if (index === -1) return prevItems;
+
+        const newItems = [...prevItems];
+        const targetItemStr = newItems[index].trim();
+        const match = targetItemStr.match(/^(.*)\*(\d+)$/);
+
+        if (match) {
+          const text = match[1].trim();
+          const weight = parseInt(match[2], 10);
+          if (weight > 1) {
+            newItems[index] = `${text}*${weight - 1}`;
+          } else {
+            newItems.splice(index, 1);
+          }
+        } else {
+          newItems.splice(index, 1);
+        }
+        return newItems;
+      });
       setWinner(null);
     }, []);
 
@@ -1491,22 +1519,22 @@
         document.exitFullscreen();
       }
     }, []);
-    
+
     const handleSelectScreen = async () => {
-        if (!('getScreenDetails' in window)) {
-            alert('이 브라우저에서는 화면 선택 기능을 지원하지 않습니다.');
-            return;
-        }
-        try {
-            const screenDetails = await window.getScreenDetails();
-            setScreens(screenDetails.screens);
-            setShowScreenPicker(true);
-        } catch (err) {
-            console.error("Error getting screen details:", err);
-            alert(`화면 정보를 가져올 수 없습니다: ${err.message}`);
-        }
+      if (!('getScreenDetails' in window)) {
+          alert('이 브라우저에서는 화면 선택 기능을 지원하지 않습니다.');
+          return;
+      }
+      try {
+          const screenDetails = await window.getScreenDetails();
+          setScreens(screenDetails.screens);
+          setShowScreenPicker(true);
+      } catch (err) {
+          console.error("Error getting screen details:", err);
+          alert(`화면 정보를 가져올 수 없습니다: ${err.message}`);
+      }
     };
-    
+
     const enterFullscreenOnScreen = (screen) => {
         document.documentElement.requestFullscreen({ screen }).catch(err => {
             alert(`선택한 화면에서 전체 화면 모드를 시작할 수 없습니다: ${err.message}`);
@@ -1522,16 +1550,17 @@
             onSave: setTitle,
             as: "h1",
             className: "text-4xl md:text-5xl font-bold text-cyan-400 tracking-wider",
-            ariaLabel: "타이틀 수정",
+            ariaLabel: "타이틀 수정"
           }),
           createElement(EditableText, {
             initialValue: subtitle,
             onSave: setSubtitle,
             as: "p",
             className: "text-gray-400 mt-2",
-            ariaLabel: "부제 수정",
+            ariaLabel: "부제 수정"
           })
         ),
+
         createElement("main", { className: "w-full max-w-7xl flex-grow flex flex-col lg:flex-row gap-8 items-stretch min-h-0" },
           createElement("div", { ref: wheelContainerRef, className: "w-full lg:w-2/3 flex items-center justify-center" },
             createElement(Wheel, { items: wheelItems, onSpinEnd: handleSpinEnd, isBoosterMode: isBoosterMode })
@@ -1548,42 +1577,57 @@
               expandedHeight: "85dvh",
               collapsedVisibleHeight: collapsedVisibleHeight,
               isBoosterMode: isBoosterMode,
-              onBoosterModeChange: setIsBoosterMode,
+              onBoosterModeChange: setIsBoosterMode
             })
           )
         ),
+
         createElement(ResultModal, { winner: winner, onClose: handleCloseModal, onDeleteWinner: handleDeleteWinner }),
-        createElement(ScreenPickerModal, { show: showScreenPicker, screens: screens, onSelect: enterFullscreenOnScreen, onClose: () => setShowScreenPicker(false) })
+        createElement(ScreenPickerModal, { 
+            show: showScreenPicker, 
+            screens: screens, 
+            onSelect: enterFullscreenOnScreen, 
+            onClose: () => setShowScreenPicker(false) 
+        })
       ),
+
       createElement("div", { className: "fixed bottom-4 right-4 z-30 flex flex-col items-end gap-3" },
         createElement("button", {
-            onClick: toggleMute,
-            className: "bg-slate-700 hover:bg-slate-600 text-white font-bold w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-colors",
-            "aria-label": isMuted ? "BGM 켜기" : "BGM 끄기"
+          onClick: toggleMute,
+          className: "bg-slate-700 hover:bg-slate-600 text-white font-bold w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-colors",
+          "aria-label": isMuted ? "BGM 켜기" : "BGM 끄기"
         },
-            isMuted ?
-                createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-6 w-6", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2 },
-                    createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .89-1.077 1.337-1.707.707L5.586 15z" }),
-                    createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M19 9l-6 6M13 9l6 6" })
-                ) :
-                createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-6 w-6", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2 },
-                    createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .89-1.077 1.337-1.707.707L5.586 15z" })
-                )
+          isMuted ? 
+            createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-6 w-6", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2 },
+              createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .89-1.077 1.337-1.707.707L5.586 15z" }),
+              createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M19 9l-6 6M13 9l6 6" })
+            ) : 
+            createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-6 w-6", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2 },
+               createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .89-1.077 1.337-1.707.707L5.586 15z" })
+            )
         ),
-        createElement("button", { onClick: toggleFullscreen, className: "bg-slate-700 hover:bg-slate-600 text-white font-bold w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-colors", "aria-label": isFullscreen ? "전체 화면 종료" : "전체 화면 시작" },
-          isFullscreen ?
+        createElement("button", {
+          onClick: toggleFullscreen,
+          className: "bg-slate-700 hover:bg-slate-600 text-white font-bold w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-colors",
+          "aria-label": isFullscreen ? "전체 화면 종료" : "전체 화면 시작"
+        },
+          isFullscreen ? 
             createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-6 w-6", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2 },
               createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M9 9L4 4m0 0v4m0-4h4M15 9l5-5m0 0v4m0-4h-4M9 15l-5 5m0 0v-4m0 4h4M15 15l5 5m0 0v-4m0 4h-4" })
-            ) :
+            ) : 
             createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-6 w-6", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2 },
               createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M4 8V4m0 0h4M4 4l5 5M20 8V4m0 0h-4M20 4l-5 5M4 16v4m0 0h4M4 20l5-5M20 16v4m0 0h-4M20 20l-5-5" })
             )
         ),
-        !isFullscreen && 'getScreenDetails' in window &&
-        createElement("button", { onClick: handleSelectScreen, className: "bg-slate-700 hover:bg-slate-600 text-white font-bold w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-colors", "aria-label": "모니터 선택하여 전체 화면" },
-          createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-6 w-6", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2 },
-            createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" })
-          )
+
+        !isFullscreen && 'getScreenDetails' in window && createElement("button", {
+              onClick: handleSelectScreen,
+              className: "bg-slate-700 hover:bg-slate-600 text-white font-bold w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-colors",
+              "aria-label": "모니터 선택하여 전체 화면"
+          },
+              createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-6 w-6", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2 },
+                createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" })
+              )
         )
       )
     );

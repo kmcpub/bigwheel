@@ -373,18 +373,38 @@ const App: React.FC = () => {
   }, []);
 
   const handleDeleteWinner = useCallback((winnerToDelete: string) => {
-    setItems(prevItems => prevItems.filter(itemStr => {
-      const trimmedItemStr = itemStr.trim();
-      if (!trimmedItemStr) return false;
+    setItems(prevItems => {
+      // 첫 번째로 일치하는 항목(또는 가중치 항목)의 인덱스를 찾습니다.
+      const index = prevItems.findIndex(itemStr => {
+        const trimmedItemStr = itemStr.trim();
+        if (!trimmedItemStr) return false;
+        
+        const match = trimmedItemStr.match(/^(.*)\*(\d+)$/);
+        const itemName = match ? match[1].trim() : trimmedItemStr;
+        return itemName === winnerToDelete;
+      });
 
-      const match = trimmedItemStr.match(/^(.*)\*(\d+)$/);
-      const text = match ? match[1].trim() : trimmedItemStr;
-      
-      // 텍스트가 비어있는 항목은 삭제 과정에서 항상 제거될 수 있습니다.
-      if (!text) return false;
+      if (index === -1) return prevItems; // 일치하는 항목이 없음
 
-      return text !== winnerToDelete;
-    }));
+      const newItems = [...prevItems];
+      const targetItemStr = newItems[index].trim();
+      const match = targetItemStr.match(/^(.*)\*(\d+)$/);
+
+      if (match) {
+        // 가중치가 있는 항목인 경우, 가중치를 감소시키거나 1이면 제거합니다.
+        const text = match[1].trim();
+        const weight = parseInt(match[2], 10);
+        if (weight > 1) {
+          newItems[index] = `${text}*${weight - 1}`;
+        } else {
+          newItems.splice(index, 1);
+        }
+      } else {
+        // 일반 항목인 경우 제거합니다.
+        newItems.splice(index, 1);
+      }
+      return newItems;
+    });
     setWinner(null); // 모달도 닫습니다.
   }, []);
 
