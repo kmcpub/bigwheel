@@ -199,10 +199,12 @@
           if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
             audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
           }
-          if (audioContextRef.current.state === 'suspended') {
-              audioContextRef.current.resume();
+          const ctx = audioContextRef.current;
+          if (ctx.state === 'suspended') {
+              ctx.resume().then(() => playFanfare(ctx));
+          } else {
+              playFanfare(ctx);
           }
-          playFanfare(audioContextRef.current);
         } catch (e) {
           console.error("오디오 컨텍스트를 생성하거나 팡파레를 재생할 수 없습니다:", e);
         }
@@ -223,6 +225,7 @@
           });
           setConfetti(current => [...current, ...newPieces]);
         };
+        addConfetti();
         interval = setInterval(addConfetti, 100);
       } else {
         setIsVisible(false);
@@ -1491,20 +1494,8 @@
         if (index === -1) return prevItems;
 
         const newItems = [...prevItems];
-        const targetItemStr = newItems[index].trim();
-        const match = targetItemStr.match(/^(.*)\*(\d+)$/);
-
-        if (match) {
-          const text = match[1].trim();
-          const weight = parseInt(match[2], 10);
-          if (weight > 1) {
-            newItems[index] = `${text}*${weight - 1}`;
-          } else {
-            newItems.splice(index, 1);
-          }
-        } else {
-          newItems.splice(index, 1);
-        }
+        // Remove the entire line regardless of multiplier or duplicates on other lines
+        newItems.splice(index, 1);
         return newItems;
       });
       setWinner(null);

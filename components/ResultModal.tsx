@@ -37,11 +37,10 @@ const ResultModal: React.FC<ResultModalProps> = ({ winner, onClose, onDeleteWinn
       frequency: number,
       startTime: number,
       duration: number,
-      volume: number = 0.3,
+      volume = 0.3,
       type1: OscillatorType = 'sawtooth',
       type2: OscillatorType = 'square'
     ) => {
-      // Layering oscillators for a richer, brassy tone
       const osc1 = audioContext.createOscillator();
       const osc2 = audioContext.createOscillator();
       const gainNode = audioContext.createGain();
@@ -54,14 +53,13 @@ const ResultModal: React.FC<ResultModalProps> = ({ winner, onClose, onDeleteWinn
       osc2.type = type2;
 
       osc1.frequency.setValueAtTime(frequency, startTime);
-      // Slightly detune the second oscillator for a chorus effect
-      osc2.frequency.setValueAtTime(frequency * 1.005, startTime);
+      osc2.frequency.setValueAtTime(frequency * 1.005, startTime); // Detune for chorus effect
 
-      // ADSR-like envelope for a punchier sound
+      // Envelope
       gainNode.gain.setValueAtTime(0, startTime);
-      gainNode.gain.linearRampToValueAtTime(volume, startTime + 0.02); // Fast attack
-      gainNode.gain.exponentialRampToValueAtTime(volume * 0.7, startTime + 0.1); // Decay
-      gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + duration); // Release
+      gainNode.gain.linearRampToValueAtTime(volume, startTime + 0.02);
+      gainNode.gain.exponentialRampToValueAtTime(volume * 0.7, startTime + 0.1);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
 
       osc1.start(startTime);
       osc1.stop(startTime + duration);
@@ -70,7 +68,7 @@ const ResultModal: React.FC<ResultModalProps> = ({ winner, onClose, onDeleteWinn
     };
 
     const now = audioContext.currentTime;
-    // Frequencies for a C major scale
+    // C Major chord fanfare
     const C4 = 261.63;
     const G4 = 392.00;
     const C5 = 523.25;
@@ -80,83 +78,86 @@ const ResultModal: React.FC<ResultModalProps> = ({ winner, onClose, onDeleteWinn
     const short = 0.15;
     const long = 1.0;
 
-    // Phrase 1: Quick ascending arpeggio
+    // Ba-da-da-daaa!
     playNote(C4, now, short, 0.3);
     playNote(G4, now + short, short, 0.3);
     
-    // Phrase 2: The final, rich C-major chord
+    // Chord for the final note
     const chordTime = now + short * 2;
-    playNote(C5, chordTime, long, 0.4);  // Root
-    playNote(E5, chordTime, long, 0.32); // Major third
-    playNote(G5, chordTime, long, 0.25); // Perfect fifth
+    playNote(C5, chordTime, long, 0.4);
+    playNote(E5, chordTime, long, 0.32);
+    playNote(G5, chordTime, long, 0.25);
   }, []);
 
   const handleConfettiAnimationEnd = useCallback((id: number) => {
     setConfetti(current => current.filter(c => c.id !== id));
   }, []);
-  
+
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval> | null = null;
+    let interval: any = null;
     if (winner) {
       setIsVisible(true);
-      
-      // 당첨 시 진동 효과
       if ('vibrate' in navigator) {
-        navigator.vibrate([100, 50, 100, 50, 300]); // 짧은 진동 두 번, 긴 진동 한 번
+          navigator.vibrate([100, 50, 100, 50, 300]);
       }
-
-      // 팡파레 생성 및 재생
+      
       try {
         if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
           audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
         }
-        if (audioContextRef.current.state === 'suspended') {
-            audioContextRef.current.resume();
+        
+        const ctx = audioContextRef.current;
+        if (ctx.state === 'suspended') {
+            ctx.resume().then(() => playFanfare(ctx));
+        } else {
+            playFanfare(ctx);
         }
-        playFanfare(audioContextRef.current);
       } catch (e) {
         console.error("오디오 컨텍스트를 생성하거나 팡파레를 재생할 수 없습니다:", e);
       }
-      
+
       const addConfetti = () => {
-        const newPieces: ConfettiState[] = Array.from({ length: 10 }).map(() => {
-            const id = nextId.current++;
-            return {
-                id,
-                style: {
-                    left: `${Math.random() * 100}%`,
-                    backgroundColor: WHEEL_COLORS[Math.floor(Math.random() * WHEEL_COLORS.length)],
-                    animationDuration: `${Math.random() * 2 + 3}s`,
-                    transform: `rotate(${Math.random() * 360}deg)`,
-                    animationDelay: '0s',
-                },
-            };
+        const newPieces = Array.from({ length: 10 }).map(() => {
+          const id = nextId.current++;
+          return {
+            id,
+            style: {
+              left: `${Math.random() * 100}%`,
+              backgroundColor: WHEEL_COLORS[Math.floor(Math.random() * WHEEL_COLORS.length)],
+              animationDuration: `${Math.random() * 2 + 3}s`,
+              transform: `rotate(${Math.random() * 360}deg)`,
+              animationDelay: '0s',
+            },
+          };
         });
         setConfetti(current => [...current, ...newPieces]);
-      }
+      };
       
+      // Initial burst
+      addConfetti();
+      // Continuous rain
       interval = setInterval(addConfetti, 100);
 
     } else {
       setIsVisible(false);
-      // 모달이 닫힐 때 오디오 컨텍스트 정리
+      // Close audio context to free resources
       if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-        audioContextRef.current.close().then(() => {
-          audioContextRef.current = null;
-        });
+          audioContextRef.current.close().then(() => {
+              audioContextRef.current = null;
+          });
       }
     }
-    
+
     return () => {
-      if(interval) clearInterval(interval);
-    }
+      if (interval) clearInterval(interval);
+    };
   }, [winner, playFanfare]);
-  
+
   const handleTransitionEnd = () => {
     if (!winner) {
-        setConfetti([]); // 모달 닫힘 애니메이션이 끝나면 색종이를 모두 제거합니다.
+      setConfetti([]);
     }
-  }
+  };
   
   const handleConfirmDelete = () => {
     if (winner) {
@@ -170,35 +171,36 @@ const ResultModal: React.FC<ResultModalProps> = ({ winner, onClose, onDeleteWinn
 
   return (
     <div 
-        className={`fixed inset-0 bg-black flex items-center justify-center z-50 p-4 transition-opacity duration-300 ${isVisible ? 'bg-opacity-75' : 'bg-opacity-0 pointer-events-none'}`}
-        onClick={onClose}
-        onTransitionEnd={handleTransitionEnd}
+      className={`fixed inset-0 bg-black flex items-center justify-center z-50 p-4 transition-opacity duration-300 ${isVisible ? 'bg-opacity-75' : 'bg-opacity-0 pointer-events-none'}`}
+      onClick={onClose}
+      onTransitionEnd={handleTransitionEnd}
     >
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {confetti.map(c => 
+        {confetti.map(c => (
           <ConfettiPiece 
             key={c.id} 
             id={c.id} 
             style={c.style} 
             onAnimationEnd={handleConfettiAnimationEnd} 
           />
-        )}
+        ))}
       </div>
+      
       <div 
         className={`flex flex-col items-center justify-center transform transition-all duration-700 ease-out ${isVisible ? 'scale-100 opacity-100' : 'scale-125 opacity-0'}`}
         onClick={(e) => e.stopPropagation()}
       >
         <p 
-            className="font-extrabold text-white text-center break-words" 
-            style={{
-                fontSize: 'clamp(3rem, 15vw, 12rem)',
-                lineHeight: '1',
-                textShadow: '0 5px 30px rgba(0, 0, 0, 0.5), 0 0 25px rgba(250, 204, 21, 0.8)'
-            }}
+          className="font-extrabold text-white text-center break-words"
+          style={{ 
+            fontSize: 'clamp(3rem, 15vw, 12rem)',
+            lineHeight: '1',
+            textShadow: '0 5px 30px rgba(0, 0, 0, 0.5), 0 0 25px rgba(250, 204, 21, 0.8)'
+          }}
         >
           {winner}
         </p>
-
+        
         <div className="mt-12 flex flex-col sm:flex-row items-center justify-center gap-4">
             <button
                 onClick={handleConfirmDelete}

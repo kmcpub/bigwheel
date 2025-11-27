@@ -387,22 +387,10 @@ const App: React.FC = () => {
       if (index === -1) return prevItems; // 일치하는 항목이 없음
 
       const newItems = [...prevItems];
-      const targetItemStr = newItems[index].trim();
-      const match = targetItemStr.match(/^(.*)\*(\d+)$/);
-
-      if (match) {
-        // 가중치가 있는 항목인 경우, 가중치를 감소시키거나 1이면 제거합니다.
-        const text = match[1].trim();
-        const weight = parseInt(match[2], 10);
-        if (weight > 1) {
-          newItems[index] = `${text}*${weight - 1}`;
-        } else {
-          newItems.splice(index, 1);
-        }
-      } else {
-        // 일반 항목인 경우 제거합니다.
-        newItems.splice(index, 1);
-      }
+      // 가중치(multiplier)가 있더라도 해당 항목 전체를 삭제합니다.
+      // 별도의 줄에 있는 항목은 별개의 인덱스를 가지므로 이 로직은 하나의 항목(줄)만 삭제합니다.
+      newItems.splice(index, 1);
+      
       return newItems;
     });
     setWinner(null); // 모달도 닫습니다.
