@@ -180,7 +180,8 @@ const ResultModal: React.FC<ResultModalProps> = ({ winner, onClose, onDeleteWinn
         const ctx = canvas.getContext('2d');
         if (ctx) {
           const handleResize = () => {
-            const dpr = window.devicePixelRatio || 1;
+            // RK3288 같은 저성능 고해상도 태블릿에서 과부하가 걸리지 않도록 DPR을 최대 1.0으로 보수적으로 제한
+            const dpr = Math.min(1.0, window.devicePixelRatio || 1);
             canvas.width = window.innerWidth * dpr;
             canvas.height = window.innerHeight * dpr;
             canvas.style.width = `${window.innerWidth}px`;
@@ -192,10 +193,10 @@ const ResultModal: React.FC<ResultModalProps> = ({ winner, onClose, onDeleteWinn
           handleResize();
           window.addEventListener('resize', handleResize);
 
-          // 초기 폭발 (Burst) 파티클 양방향 발사 (왼쪽 아래 & 오른쪽 아래)
+          // 초기 폭발 (Burst) 파티클 양방향 발사 (저성능 CPU/GPU 고려하여 각각 25개로 축소 조정)
           const w = window.innerWidth;
           const h = window.innerHeight;
-          for (let i = 0; i < 50; i++) {
+          for (let i = 0; i < 25; i++) {
             particles.push(ConfettiParticle.createBurst(w, h, w * 0.1, h * 0.9));
             particles.push(ConfettiParticle.createBurst(w, h, w * 0.9, h * 0.9));
           }
@@ -206,8 +207,8 @@ const ResultModal: React.FC<ResultModalProps> = ({ winner, onClose, onDeleteWinn
             
             ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
 
-            // 잔잔한 꽃가루비 공급 (최대 160개 유지)
-            if (particles.length < 160 && Math.random() < 0.3) {
+            // 잔잔한 꽃가루비 공급 (저성능 기기 최적화를 위해 최대 60개로 대폭 제한)
+            if (particles.length < 60 && Math.random() < 0.25) {
               particles.push(new ConfettiParticle(window.innerWidth, window.innerHeight));
             }
 

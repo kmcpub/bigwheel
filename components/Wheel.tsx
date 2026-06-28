@@ -223,15 +223,17 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd, isBoosterMode }) => {
     };
   }, [initializeAudio]);
 
-  const playTickSound = useCallback(() => {
+  const playTickSound = useCallback((delaySeconds: number = 0, bypassThrottle: boolean = false) => {
     // [중요!] 오디오 중첩 과부하를 막는 최소 가청 쓰로틀링 (4ms: 120Hz 고주사율 기기의 8.3ms 프레임 타임보다 낮게 설정하여 씹힘 현상 완벽 방지)
     const nowTime = performance.now();
-    if (nowTime - lastTickTimeRef.current < 4) {
-      return;
+    if (!bypassThrottle && delaySeconds === 0) {
+      if (nowTime - lastTickTimeRef.current < 4) {
+        return;
+      }
+      lastTickTimeRef.current = nowTime;
     }
-    lastTickTimeRef.current = nowTime;
 
-    if ('vibrate' in navigator) {
+    if ('vibrate' in navigator && delaySeconds === 0) {
       navigator.vibrate(10);
     }
     
@@ -249,8 +251,8 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd, isBoosterMode }) => {
         const source = audioContext.createBufferSource();
         source.buffer = tickBufferRef.current;
         source.connect(gainNodeRef.current);
-        // 즉각 재생: 어택을 씹지 않고 칼같이 정확한 타이밍에 소리가 나오도록 딜레이 제거
-        source.start(audioContext.currentTime);
+        // 즉각 재생 또는 미래 시간 재생 지원
+        source.start(audioContext.currentTime + delaySeconds);
       } else {
         // 백업용 오실레이터 비동기 완벽 방어 처리 (gainNodeRef 동일 적용)
         const osc = audioContext.createOscillator();
@@ -263,14 +265,14 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd, isBoosterMode }) => {
         }
         
         osc.type = 'triangle';
-        osc.frequency.setValueAtTime(1400, audioContext.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(120, audioContext.currentTime + 0.055);
+        osc.frequency.setValueAtTime(1400, audioContext.currentTime + delaySeconds);
+        osc.frequency.exponentialRampToValueAtTime(120, audioContext.currentTime + delaySeconds + 0.055);
         
-        gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.055);
+        gainNode.gain.setValueAtTime(0.5, audioContext.currentTime + delaySeconds);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + delaySeconds + 0.055);
         
-        osc.start(audioContext.currentTime);
-        osc.stop(audioContext.currentTime + 0.055);
+        osc.start(audioContext.currentTime + delaySeconds);
+        osc.stop(audioContext.currentTime + delaySeconds + 0.055);
       }
     };
     
@@ -328,8 +330,12 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd, isBoosterMode }) => {
     const boundaryCount = Math.abs(Math.floor(angle2 / segmentAngle) - Math.floor(angle1 / segmentAngle));
 
     if (boundaryCount > 0) {
-        // 경계선을 지나면 틱 소리 재생 (쓰로틀러가 중첩을 맑게 제어)
-        playTickSound();
+        // 경계선을 지나면 틱 소리 재생 (지연 예약을 통해 모든 경계음이 누락 없이 청명하게 들리도록 개선)
+        const count = Math.min(boundaryCount, 5);
+        const timeStep = 0.015; // 15ms 간격으로 명확하게 구분된 또르륵 소리 재생
+        for (let i = 0; i < count; i++) {
+            playTickSound(i * timeStep, true);
+        }
         const kickVelocity = 15 + Math.random() * 5;
         if (pointerRotationRef.current > 0) pointerRotationRef.current = 0;
         pointerVelocityRef.current = -kickVelocity;
@@ -407,8 +413,12 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd, isBoosterMode }) => {
         const boundaryCount = Math.abs(Math.floor(angle2 / pointerSegmentAngle) - Math.floor(angle1 / pointerSegmentAngle));
         
         if (boundaryCount > 0) {
-          // 경계를 통과하면 틱 사운드 재생 (쓰로틀러가 재생 속도에 맞춰 깔끔하게 디바운싱)
-          playTickSound();
+          // 경계를 통과하면 틱 사운드 재생 (지연 예약을 통해 모든 경계음이 누락 없이 청명하게 들리도록 개선)
+          const count = Math.min(boundaryCount, 5);
+          const timeStep = 0.015; // 15ms 간격으로 명확하게 구분된 또르륵 소리 재생
+          for (let i = 0; i < count; i++) {
+            playTickSound(i * timeStep, true);
+          }
           
           const currentSegmentIndex = Math.floor(angle2 / pointerSegmentAngle);
           const lastSegmentIndex = Math.floor(angle1 / pointerSegmentAngle);
@@ -576,8 +586,12 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd, isBoosterMode }) => {
     const boundaryCount = Math.abs(Math.floor(angle2 / segmentAngle) - Math.floor(angle1 / segmentAngle));
     
     if (boundaryCount > 0) {
-      // 드래그 속도에 상관없이 경계를 넘을 때마다 틱 소리 깔끔하게 재생 (초당 최대 40회 제한으로 씹힘 및 찌그러짐 차단)
-      playTickSound();
+      // 드래그 속도에 상관없이 경계를 넘을 때마다 모든 틱 소리를 지연 예약하여 누락 없이 재생
+      const count = Math.min(boundaryCount, 5);
+      const timeStep = 0.015; // 15ms 간격
+      for (let i = 0; i < count; i++) {
+        playTickSound(i * timeStep, true);
+      }
       lastDragSegmentIndexRef.current = Math.floor(angle2 / segmentAngle);
     }
 
@@ -745,7 +759,6 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd, isBoosterMode }) => {
                 WebkitTransform: `translateX(-50%) rotate(${pointerRotation}deg) translateZ(0)`,
                 transformOrigin: '50% 33.33%',
                 WebkitTransformOrigin: '50% 33.33%',
-                filter: 'drop-shadow(0 2px 3px rgba(0, 0, 0, 0.4))',
                 willChange: 'transform',
                 backfaceVisibility: 'hidden',
                 WebkitBackfaceVisibility: 'hidden',
