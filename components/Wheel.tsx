@@ -593,6 +593,23 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd, isBoosterMode }) => {
         playTickSound(i * timeStep, true);
       }
       lastDragSegmentIndexRef.current = Math.floor(angle2 / segmentAngle);
+
+      // 수동 드래그 시에도 바늘(pointer)이 경계를 지날 때 진행 방향으로 튕기도록 물리 반응 강제 적용
+      const dragDirection = Math.sign(deltaAngle) || 1;
+      const dragSpeed = Math.abs(deltaAngle);
+      const kickVelocity = 4 + Math.min(12, dragSpeed * 2.5);
+
+      if (dragDirection > 0) {
+        if (pointerRotationRef.current > 0) pointerRotationRef.current = 0;
+        pointerVelocityRef.current = -kickVelocity;
+      } else {
+        if (pointerRotationRef.current < 0) pointerRotationRef.current = 0;
+        pointerVelocityRef.current = kickVelocity;
+      }
+
+      if (!animationFrameRef.current) {
+        animationFrameRef.current = requestAnimationFrame(animate);
+      }
     }
 
     const now = performance.now();
@@ -611,7 +628,7 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd, isBoosterMode }) => {
     }
 
     lastPointerAngleRef.current = currentPointerAngle;
-  }, [getAngleFromEvent, items.length, playTickSound]);
+  }, [getAngleFromEvent, items.length, playTickSound, animate]);
 
   const handlePointerUp = useCallback((e: PointerEvent) => {
     if (!isDraggingRef.current) return;
