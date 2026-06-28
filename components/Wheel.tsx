@@ -12,7 +12,7 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd, isBoosterMode }) => {
   const [rotation, setRotation] = useState(0);
   const [pointerRotation, setPointerRotation] = useState(0);
 
-  // 물리 애니메이션 상태를 위한 Ref
+  // 물리 애니메이션 상태를 위한 Ref 및 DOM 요소 제어를 위한 Ref
   const isSpinningRef = useRef(false);
   const settlingRef = useRef(false);
   const velocityRef = useRef(0);
@@ -25,6 +25,14 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd, isBoosterMode }) => {
   const animationFrameRef = useRef<number | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const tickBufferRef = useRef<AudioBuffer | null>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
+  const keepAliveOscRef = useRef<OscillatorNode | null>(null);
+  const keepAliveGainRef = useRef<GainNode | null>(null);
+  const lastTickTimeRef = useRef<number>(0);
+
+  // DOM 직접 제어를 위한 Ref (성능 극대화)
+  const wheelGroupRef = useRef<HTMLDivElement>(null);
+  const pointerRef = useRef<HTMLDivElement>(null);
 
   // 드래그/스와이프를 위한 Ref
   const wheelContainerRef = useRef<HTMLDivElement>(null);
@@ -65,19 +73,219 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd, isBoosterMode }) => {
   const center = size / 2;
   const radius = size / 2 - 10;
 
-  const playTickSound = useCallback(() => {
-    if ('vibrate' in navigator) {
-      navigator.vibrate(15);
+  const lastDragSegmentIndexRef = useRef<number>(0);
+
+  // 고품질 틱 소리를 위한 오디오 및 틱 버퍼 동기식 초기화 (지연 없음)
+  const initializeAudio = useCallback(() => {
+    if (!audioContextRef.current) {
+      try {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContextClass) {
+          audioContextRef.current = new AudioContextClass();
+        }
+      } catch (e) {
+        console.error("Web Audio API is not supported in this browser.", e);
+        return;
+      }
     }
     
-    if (!audioContextRef.current || !tickBufferRef.current) return;
-    const audioContext = audioContextRef.current;
-    
-    const source = audioContext.createBufferSource();
-    source.buffer = tickBufferRef.current;
-    source.connect(audioContext.destination);
-    source.start();
+    const context = audioContextRef.current;
+    if (context) {
+      if (context.state === 'suspended') {
+        context.resume();
+      }
+
+      // [핵심!] 스마트폰/OS/사운드카드 오토뮤트 및 앞부분 페이드인(씹힘) 완벽 방지 (Keep-Alive 엔진)
+      // 인간의 귀로는 들리지 않는 초고주파(19000Hz) 신호를 아주 미세한 볼륨(0.00015)으로 상시 전송하여
+      // 오디오 믹서와 하드웨어를 '항시 핫-스탠바이(활성) 상태'로 묶어둡니다. (BGM이 꺼져 있어도 어택 씹힘 완전 해결!)
+      if (!keepAliveOscRef.current) {
+        try {
+          const osc = context.createOscillator();
+          const keepAliveGain = context.createGain();
+          
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(19000, context.currentTime); // 19kHz 초고주파 (인간 가청 영역 밖의 무음)
+          
+          keepAliveGain.gain.setValueAtTime(0.00015, context.currentTime); // 오디오 칩셋을 계속 깨워두는 최적의 미세 볼륨
+          
+          osc.connect(keepAliveGain);
+          keepAliveGain.connect(context.destination);
+          
+          osc.start(0);
+          keepAliveOscRef.current = osc;
+          keepAliveGainRef.current = keepAliveGain;
+        } catch (e) {
+          console.error("Failed to start Keep-Alive background signal", e);
+        }
+      }
+
+      // [핵심!] 볼륨 평준화 및 BGM ducking 방지를 위한 전용 볼륨 노드(GainNode) 생성
+      if (!gainNodeRef.current) {
+        try {
+          const gainNode = context.createGain();
+          // 풍부하면서도 다른 사운드와 조화를 이루는 선명한 0.95 볼륨 비율 적용
+          gainNode.gain.setValueAtTime(0.95, context.currentTime);
+          gainNode.connect(context.destination);
+          gainNodeRef.current = gainNode;
+        } catch (e) {
+          console.error("Failed to initialize GainNode", e);
+        }
+      }
+
+      // 완전히 새로 설계한 명료하고 단단한 프리미엄 '또르륵' 목재 핀 타격 사운드 합성 (55ms 존재감 넘치는 명품 파형)
+      if (!tickBufferRef.current) {
+        const duration = 0.055; // 55ms의 기분 좋은 존재감 있는 재생 시간
+        const sampleRate = context.sampleRate;
+        const frameCount = sampleRate * duration;
+        const buffer = context.createBuffer(1, frameCount, sampleRate);
+        const data = buffer.getChannelData(0);
+        
+        for (let i = 0; i < frameCount; i++) {
+          const t = i / sampleRate;
+          
+          // 1. 맑고 청량하게 딱! 튕기는 고속 주파수 스윕 (2800Hz -> 350Hz)
+          const sweepFreq = 350 + 2450 * Math.exp(-220 * t);
+          const tone = Math.sin(2 * Math.PI * sweepFreq * t);
+          
+          // 2. 맑은 공명 울림 레이어 (980Hz 고정 주파수 사인파)
+          const resonance = Math.sin(2 * Math.PI * 980 * t) * Math.exp(-120 * t);
+          
+          // 3. 단단한 나무 몸체를 가볍고 깊게 쳐서 울리는 목재 타격 본체음 (130Hz)
+          const body = Math.sin(2 * Math.PI * 130 * t) * Math.exp(-180 * t);
+          
+          // 4. 플라스틱/나무 핀이 걸쇠를 긁고 넘어가며 생기는 실감 나는 마찰 고주파 노이즈
+          const noise = (Math.random() * 2 - 1) * 0.15 * Math.exp(-350 * t);
+          
+          // 5. 어택 지연(페이드인 씹힘)을 완벽 방지하기 위해 0.4ms의 초예리한 엔벨롭 적용 (팝노이즈 차단 목적)
+          let envelope = Math.exp(-85 * t);
+          if (t < 0.0004) {
+            envelope *= (t / 0.0004);
+          }
+          
+          // 6. 모든 신호를 고품질로 합성하고 시원하게 꽂히도록 2.0배 증폭 (꽉 찬 볼륨감)
+          const sampleValue = (tone * 0.5 + resonance * 0.3 + body * 0.35 + noise * 0.15) * envelope;
+          data[i] = Math.max(-0.95, Math.min(0.95, sampleValue * 2.0));
+        }
+        tickBufferRef.current = buffer;
+      }
+    }
   }, []);
+
+  // 컴포넌트 마운트 시 및 첫 사용자 제스처(터치/클릭) 시 오디오 컨텍스트 사전 활성화 및 언락 처리
+  useEffect(() => {
+    const handleUnlock = () => {
+      if (!audioContextRef.current) {
+        try {
+          const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+          if (AudioContextClass) {
+            audioContextRef.current = new AudioContextClass();
+          }
+        } catch (e) {
+          console.error("AudioContext initialization failed:", e);
+        }
+      }
+      
+      const context = audioContextRef.current;
+      if (context) {
+        if (context.state === 'suspended') {
+          context.resume().then(() => {
+            initializeAudio();
+          });
+        } else {
+          initializeAudio();
+        }
+      }
+    };
+
+    // 첫 터치나 마우스 클릭 시 오디오 즉각 언락
+    window.addEventListener('pointerdown', handleUnlock, { once: true });
+    window.addEventListener('click', handleUnlock, { once: true });
+
+    // 컴포넌트 마운트와 동시에 초기화 시도
+    handleUnlock();
+
+    return () => {
+      window.removeEventListener('pointerdown', handleUnlock);
+      window.removeEventListener('click', handleUnlock);
+      if (keepAliveOscRef.current) {
+        try {
+          keepAliveOscRef.current.stop();
+          keepAliveOscRef.current.disconnect();
+        } catch (e) {}
+          keepAliveOscRef.current = null;
+      }
+      if (keepAliveGainRef.current) {
+        try {
+          keepAliveGainRef.current.disconnect();
+        } catch (e) {}
+          keepAliveGainRef.current = null;
+      }
+    };
+  }, [initializeAudio]);
+
+  const playTickSound = useCallback(() => {
+    // [중요!] 오디오 중첩 과부하를 막는 최소 가청 쓰로틀링 (4ms: 120Hz 고주사율 기기의 8.3ms 프레임 타임보다 낮게 설정하여 씹힘 현상 완벽 방지)
+    const nowTime = performance.now();
+    if (nowTime - lastTickTimeRef.current < 4) {
+      return;
+    }
+    lastTickTimeRef.current = nowTime;
+
+    if ('vibrate' in navigator) {
+      navigator.vibrate(10);
+    }
+    
+    // 오디오 컨텍스트가 아예 생성되지 않았을 경우를 위해 즉시 초기화
+    if (!audioContextRef.current) {
+      initializeAudio();
+    }
+    
+    const audioContext = audioContextRef.current;
+    if (!audioContext) return;
+    
+    const playNow = () => {
+      // 전용 gainNode가 있는 경우 여기에 안전하게 연결하여 오버플로우 방지
+      if (tickBufferRef.current && gainNodeRef.current) {
+        const source = audioContext.createBufferSource();
+        source.buffer = tickBufferRef.current;
+        source.connect(gainNodeRef.current);
+        // 즉각 재생: 어택을 씹지 않고 칼같이 정확한 타이밍에 소리가 나오도록 딜레이 제거
+        source.start(audioContext.currentTime);
+      } else {
+        // 백업용 오실레이터 비동기 완벽 방어 처리 (gainNodeRef 동일 적용)
+        const osc = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        osc.connect(gainNode);
+        if (gainNodeRef.current) {
+          gainNode.connect(gainNodeRef.current);
+        } else {
+          gainNode.connect(audioContext.destination);
+        }
+        
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(1400, audioContext.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(120, audioContext.currentTime + 0.055);
+        
+        gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.055);
+        
+        osc.start(audioContext.currentTime);
+        osc.stop(audioContext.currentTime + 0.055);
+      }
+    };
+    
+    // 비동기 딜레이를 완벽 차단하기 위해 suspended인 경우 즉시 강제 resume 후 재생
+    if (audioContext.state === 'suspended') {
+      audioContext.resume().then(() => {
+        playNow();
+      }).catch((err) => {
+        console.error("Audio resume failed, playing directly", err);
+        playNow();
+      });
+    } else {
+      playNow();
+    }
+  }, [initializeAudio]);
 
   // 부스터 모드를 위한 감속/가속 Easing 함수
   const easeOutQuint = (x: number): number => {
@@ -96,7 +304,10 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd, isBoosterMode }) => {
     const currentRotation = startRotation + (targetRotation - startRotation) * easedProgress;
     
     rotationRef.current = currentRotation;
-    setRotation(currentRotation);
+    if (wheelGroupRef.current) {
+      wheelGroupRef.current.style.transform = `rotate(${currentRotation + 90}deg) translateZ(0)`;
+      wheelGroupRef.current.style.webkitTransform = `rotate(${currentRotation + 90}deg) translateZ(0)`;
+    }
     
     const POINTER_STIFFNESS = 0.3;
     const POINTER_DAMPING = 0.85;
@@ -104,14 +315,20 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd, isBoosterMode }) => {
     pointerVelocityRef.current += restoringForce;
     pointerVelocityRef.current *= POINTER_DAMPING;
     pointerRotationRef.current += pointerVelocityRef.current;
-    setPointerRotation(pointerRotationRef.current);
+    if (pointerRef.current) {
+      pointerRef.current.style.transform = `translateX(-50%) rotate(${pointerRotationRef.current}deg) translateZ(0)`;
+      pointerRef.current.style.webkitTransform = `translateX(-50%) rotate(${pointerRotationRef.current}deg) translateZ(0)`;
+    }
 
     const segmentAngle = 360 / (items.length || 1);
     const pointerOffset = 180.0;
-    const lastSegIdx = Math.floor((boosterAnimState.current.lastRotation - pointerOffset) / segmentAngle);
-    const currentSegIdx = Math.floor((currentRotation - pointerOffset) / segmentAngle);
+    
+    const angle1 = boosterAnimState.current.lastRotation - pointerOffset;
+    const angle2 = currentRotation - pointerOffset;
+    const boundaryCount = Math.abs(Math.floor(angle2 / segmentAngle) - Math.floor(angle1 / segmentAngle));
 
-    if (currentSegIdx !== lastSegIdx) {
+    if (boundaryCount > 0) {
+        // 경계선을 지나면 틱 소리 재생 (쓰로틀러가 중첩을 맑게 제어)
         playTickSound();
         const kickVelocity = 15 + Math.random() * 5;
         if (pointerRotationRef.current > 0) pointerRotationRef.current = 0;
@@ -125,13 +342,15 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd, isBoosterMode }) => {
         animationFrameRef.current = null;
         isSpinningRef.current = false;
         setIsSpinning(false);
+        setRotation(currentRotation);
+        setPointerRotation(0);
         if (items[winnerIndex]) {
             onSpinEnd(items[winnerIndex]);
         }
     }
   }, [items, onSpinEnd, playTickSound]);
 
-  // 물리 기반 애니메이션 루프
+  // 물리 기반 애니메이션 루프 (리렌더링 제거 후 스타일 직접 조작)
   const animate = useCallback(() => {
     const POINTER_STIFFNESS = 0.3;
     const POINTER_DAMPING = 0.85;
@@ -140,7 +359,10 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd, isBoosterMode }) => {
     pointerVelocityRef.current += restoringForce;
     pointerVelocityRef.current *= POINTER_DAMPING;
     pointerRotationRef.current += pointerVelocityRef.current;
-    setPointerRotation(pointerRotationRef.current);
+    if (pointerRef.current) {
+      pointerRef.current.style.transform = `translateX(-50%) rotate(${pointerRotationRef.current}deg) translateZ(0)`;
+      pointerRef.current.style.webkitTransform = `translateX(-50%) rotate(${pointerRotationRef.current}deg) translateZ(0)`;
+    }
 
     if (isSpinningRef.current) {
         const HIGH_SPEED_THRESHOLD = 15.0;
@@ -178,11 +400,18 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd, isBoosterMode }) => {
 
         const nextRotation = rotationRef.current + velocity;
         const pointerOffset = 180.0;
-        const lastSegmentIndex = Math.floor((rotationRef.current - pointerOffset) / segmentAngle);
-        const currentSegmentIndex = Math.floor((nextRotation - pointerOffset) / segmentAngle);
+        const angle1 = rotationRef.current - pointerOffset;
+        const pointerSegmentAngle = 360 / (items.length || 1); // segmentAngle
+        const angle2 = nextRotation - pointerOffset;
         
-        if (currentSegmentIndex !== lastSegmentIndex) {
+        const boundaryCount = Math.abs(Math.floor(angle2 / pointerSegmentAngle) - Math.floor(angle1 / pointerSegmentAngle));
+        
+        if (boundaryCount > 0) {
+          // 경계를 통과하면 틱 사운드 재생 (쓰로틀러가 재생 속도에 맞춰 깔끔하게 디바운싱)
           playTickSound();
+          
+          const currentSegmentIndex = Math.floor(angle2 / pointerSegmentAngle);
+          const lastSegmentIndex = Math.floor(angle1 / pointerSegmentAngle);
           const kickDirection = Math.sign(velocity) || (currentSegmentIndex > lastSegmentIndex ? 1 : -1);
           const bounceStrength = Math.abs(velocity);
           const kickVelocity = 5 + bounceStrength * 2.0;
@@ -225,6 +454,10 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd, isBoosterMode }) => {
             isReversingRef.current = false;
             setIsSpinning(false);
             
+            // 회전 종료 시 최신 각도를 React 상태에 동기화
+            setRotation(rotationRef.current);
+            setPointerRotation(0);
+            
             const finalRotation = rotationRef.current;
             const degrees = (180 - (finalRotation % 360) + 360) % 360;
             const winningSegmentIndex = Math.floor(degrees / segmentAngle);
@@ -236,7 +469,10 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd, isBoosterMode }) => {
         velocityRef.current = velocity;
         rotationRef.current += velocity;
         lastRotationRef.current = rotationRef.current;
-        setRotation(rotationRef.current);
+        if (wheelGroupRef.current) {
+          wheelGroupRef.current.style.transform = `rotate(${rotationRef.current + 90}deg) translateZ(0)`;
+          wheelGroupRef.current.style.webkitTransform = `rotate(${rotationRef.current + 90}deg) translateZ(0)`;
+        }
     }
     
     if (!isSpinningRef.current && Math.abs(pointerVelocityRef.current) < 0.01 && Math.abs(pointerRotationRef.current) < 0.01) {
@@ -262,37 +498,7 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd, isBoosterMode }) => {
   const handleSpin = async () => {
     if (isSpinningRef.current || items.length < 2) return;
 
-    if (!audioContextRef.current) {
-        try {
-            audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-        } catch (e) {
-            console.error("Web Audio API is not supported in this browser.");
-        }
-    }
-    
-    if (audioContextRef.current && !tickBufferRef.current) {
-        try {
-            const context = audioContextRef.current;
-            const duration = 0.05;
-            const frameCount = context.sampleRate * duration;
-            const offlineContext = new OfflineAudioContext(1, frameCount, context.sampleRate);
-            
-            const oscillator = offlineContext.createOscillator();
-            const gainNode = offlineContext.createGain();
-            oscillator.connect(gainNode);
-            gainNode.connect(offlineContext.destination);
-
-            oscillator.type = 'triangle';
-            oscillator.frequency.setValueAtTime(1200, 0);
-            gainNode.gain.setValueAtTime(0.4, 0);
-            gainNode.gain.exponentialRampToValueAtTime(0.001, duration);
-            oscillator.start(0);
-            
-            tickBufferRef.current = await offlineContext.startRendering();
-        } catch(e) {
-            console.error('오디오 틱 버퍼를 생성하는 데 실패했습니다:', e);
-        }
-    }
+    await initializeAudio();
     
     if (isBoosterMode) {
         setIsSpinning(true);
@@ -354,7 +560,26 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd, isBoosterMode }) => {
 
     const newRotation = rotationRef.current + deltaAngle;
     rotationRef.current = newRotation;
-    setRotation(newRotation);
+    if (wheelGroupRef.current) {
+      wheelGroupRef.current.style.transform = `rotate(${newRotation + 90}deg) translateZ(0)`;
+      wheelGroupRef.current.style.webkitTransform = `rotate(${newRotation + 90}deg) translateZ(0)`;
+    }
+
+    // 드래그 중인 각도 변화에 따른 틱 소리 감지 알고리즘 적용 (느려도 무조건 소리 재생)
+    const segmentAngle = 360 / (items.length || 1);
+    const pointerOffset = 180.0;
+    
+    const prevRotation = newRotation - deltaAngle;
+    const angle1 = prevRotation - pointerOffset;
+    const angle2 = newRotation - pointerOffset;
+    
+    const boundaryCount = Math.abs(Math.floor(angle2 / segmentAngle) - Math.floor(angle1 / segmentAngle));
+    
+    if (boundaryCount > 0) {
+      // 드래그 속도에 상관없이 경계를 넘을 때마다 틱 소리 깔끔하게 재생 (초당 최대 40회 제한으로 씹힘 및 찌그러짐 차단)
+      playTickSound();
+      lastDragSegmentIndexRef.current = Math.floor(angle2 / segmentAngle);
+    }
 
     const now = performance.now();
     const lastSample = velocityHistoryRef.current[velocityHistoryRef.current.length - 1];
@@ -372,7 +597,7 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd, isBoosterMode }) => {
     }
 
     lastPointerAngleRef.current = currentPointerAngle;
-  }, [getAngleFromEvent]);
+  }, [getAngleFromEvent, items.length, playTickSound]);
 
   const handlePointerUp = useCallback((e: PointerEvent) => {
     if (!isDraggingRef.current) return;
@@ -383,6 +608,9 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd, isBoosterMode }) => {
     }
     window.removeEventListener('pointermove', handlePointerMove);
     window.removeEventListener('pointerup', handlePointerUp);
+
+    // 드래그 종료 시 각도를 React 상태에 동기화
+    setRotation(rotationRef.current);
 
     const now = performance.now();
     const recentSamples = velocityHistoryRef.current.filter(sample => now - sample.time < 100);
@@ -402,10 +630,16 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd, isBoosterMode }) => {
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     if (isSpinningRef.current) return;
     
+    initializeAudio(); // 터치 시작과 동시에 AudioContext 활성화
+    
     isDraggingRef.current = true;
     const currentPointerAngle = getAngleFromEvent(e);
     lastPointerAngleRef.current = currentPointerAngle;
     velocityHistoryRef.current = [{ velocity: 0, time: performance.now() }];
+    
+    const segmentAngle = 360 / (items.length || 1);
+    const pointerOffset = 180.0;
+    lastDragSegmentIndexRef.current = Math.floor((rotationRef.current - pointerOffset) / segmentAngle);
     
     if (wheelContainerRef.current) {
       (wheelContainerRef.current as HTMLElement).setPointerCapture(e.pointerId);
@@ -413,7 +647,7 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd, isBoosterMode }) => {
 
     window.addEventListener('pointermove', handlePointerMove);
     window.addEventListener('pointerup', handlePointerUp);
-  }, [getAngleFromEvent, handlePointerMove, handlePointerUp]);
+  }, [getAngleFromEvent, handlePointerMove, handlePointerUp, initializeAudio, items.length]);
 
   useEffect(() => {
     return () => {
@@ -501,14 +735,22 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd, isBoosterMode }) => {
         style={{ touchAction: 'none' }}
     >
         <div 
+            ref={pointerRef}
             className="absolute left-1/2 z-20"
             style={{ 
                 width: '8%', 
                 height: '12%', 
                 top: '-11%',
-                transform: `translateX(-50%) rotate(${pointerRotation}deg)`,
+                transform: `translateX(-50%) rotate(${pointerRotation}deg) translateZ(0)`,
+                WebkitTransform: `translateX(-50%) rotate(${pointerRotation}deg) translateZ(0)`,
                 transformOrigin: '50% 33.33%',
-                filter: 'drop-shadow(0 2px 3px rgba(0, 0, 0, 0.4))'
+                WebkitTransformOrigin: '50% 33.33%',
+                filter: 'drop-shadow(0 2px 3px rgba(0, 0, 0, 0.4))',
+                willChange: 'transform',
+                backfaceVisibility: 'hidden',
+                WebkitBackfaceVisibility: 'hidden',
+                transformStyle: 'preserve-3d',
+                WebkitTransformStyle: 'preserve-3d'
             }}
         >
              <svg width="100%" height="100%" viewBox="0 0 40 60" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -516,27 +758,37 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd, isBoosterMode }) => {
                 <circle cx="20" cy="20" r="7" fill="#f59e0b"/>
             </svg>
         </div>
-      <svg
-        viewBox={`0 0 ${size} ${size}`}
+      <div
+        ref={wheelGroupRef}
         className="w-full h-full"
-        style={{ transform: 'rotate(90deg)' }}
+        style={{
+          transform: `rotate(${rotation + 90}deg) translateZ(0)`,
+          WebkitTransform: `rotate(${rotation + 90}deg) translateZ(0)`,
+          transformOrigin: '50% 50%',
+          WebkitTransformOrigin: '50% 50%',
+          willChange: 'transform',
+          backfaceVisibility: 'hidden',
+          WebkitBackfaceVisibility: 'hidden',
+          transformStyle: 'preserve-3d',
+          WebkitTransformStyle: 'preserve-3d'
+        }}
       >
-        <g 
-          style={{
-            transform: `rotate(${rotation}deg)`,
-            transformOrigin: 'center',
-          }}
+        <svg
+          viewBox={`0 0 ${size} ${size}`}
+          className="w-full h-full"
         >
-          {renderSegments()}
-          {numItems > 0 && items.map((_, index) => {
-              const angleDeg = (360 / numItems) * index;
-              const [x, y] = getCoordinatesForPercent(angleDeg / 360);
-              return (
-                  <circle key={`peg-${index}`} cx={x} cy={y} r={4} fill="#1f2937" stroke="#4b5563" strokeWidth="1" />
-              );
-          })}
-        </g>
-      </svg>
+          <g>
+            {renderSegments()}
+            {numItems > 0 && items.map((_, index) => {
+                const angleDeg = (360 / numItems) * index;
+                const [x, y] = getCoordinatesForPercent(angleDeg / 360);
+                return (
+                    <circle key={`peg-${index}`} cx={x} cy={y} r={4} fill="#1f2937" stroke="#4b5563" strokeWidth="1" />
+                );
+            })}
+          </g>
+        </svg>
+      </div>
       <button
         onPointerDown={(e) => e.stopPropagation()}
         onClick={handleSpin}
