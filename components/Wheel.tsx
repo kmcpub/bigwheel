@@ -382,7 +382,7 @@ const Wheel: React.FC<WheelProps> = ({ items, onSpinEnd, isBoosterMode }) => {
             currentFriction = LOW_FRICTION + progress * (HIGH_FRICTION - LOW_FRICTION);
         }
 
-        const GRAVITY_FACTOR = 0.0012;
+        const GRAVITY_FACTOR = 0.001;
         const MIN_VELOCITY_FOR_GRAVITY = 2.0;
         const STOP_VELOCITY = 0.005;
 
